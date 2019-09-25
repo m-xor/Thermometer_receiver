@@ -11,7 +11,7 @@
 #include "link-proto.h"
 
 #define _BV(par) (1<<par)
-#include "debug_conf.h"	//for E_VAL_MSK
+#include <transmitter/debug_conf.h>	//for E_VAL_MSK
 #define VAL_ERR_MSK (E_VAL_MSK)
 
 //Zmierzony bandgap µC nadajnika *1000
