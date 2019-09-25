@@ -1,0 +1,1202 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<model version="4.3.0" links="0">
+ <documentation>Model for temometer receiver</documentation>
+ <framework name="qpc"/>
+ <package name="Events" stereotype="0x01">
+  <class name="ErrEvt" superclass="qpc::QEvt">
+   <attribute name="errCode" type="uint8_t" visibility="0x02" properties="0x00"/>
+  </class>
+  <class name="ValEvt" superclass="qpc::QEvt">
+   <attribute name="value" type="int16_t" visibility="0x02" properties="0x00">
+    <documentation>Wartość z przecinkiem przesuniętym o denom</documentation>
+   </attribute>
+   <attribute name="denom" type="uint8_t" visibility="0x02" properties="0x00">
+    <documentation>O ile miejsc jest przesuniety przecinek w value</documentation>
+   </attribute>
+  </class>
+  <class name="MsgEvt" superclass="qpc::QEvt">
+   <attribute name="timestamp" type="uint32_t" visibility="0x00" properties="0x00"/>
+   <attribute name="msgLen" type="uint8_t" visibility="0x00" properties="0x00"/>
+   <attribute name="msg[XDATA_PACKET_SIZE]" type="uint8_t" visibility="0x00" properties="0x00"/>
+  </class>
+ </package>
+ <package name="AOs" stereotype="0x02">
+  <class name="Rcv" superclass="qpc::QActive">
+   <documentation>Odbiera pełen komunikat, sprawdza Id i jeśli jest zgody pcha mesydż dalej</documentation>
+   <statechart properties="QS_FUN_DICT">
+    <initial target="../1">
+     <action>QActive_subscribe(&amp;me-&gt;super, VW_SIG);
+(void)e;
+
+QS_OBJ_DICTIONARY(AO_Rcv);
+</action>
+     <initial_glyph conn="16,3,5,0,3,3">
+      <action box="0,-2,10,2"/>
+     </initial_glyph>
+    </initial>
+    <state name="receiver">
+     <tran trig="VW">
+      <action>uint32_t timestamp = BSP_getTimestamp();
+uint8_t len = XDATA_PACKET_SIZE;
+uint8_t block[XDATA_PACKET_SIZE];
+</action>
+      <choice>
+       <guard brief="new_msg">vw_get_message(block, &amp;len) &amp;&amp; 
+isNotTrunc( block, len ) &amp;&amp;
+isIdTx( block, len)</guard>
+       <action brief="post_msg">
+QS_BEGIN(LOG_STAT,me)
+    QS_U32(0, timestamp); 
+    QS_U8(0, len); 
+    QS_MEM(block,len); 
+QS_END()   
+
+MsgEvt *pe = Q_NEW(MsgEvt, MSG_SIG);
+pe-&gt;timestamp = timestamp;
+pe-&gt;msgLen = len;
+memcpy(&amp;pe-&gt;msg, block, len);
+
+//publikuj msg. komunikaty-powtórzenia także są publikowane
+//QF_PUBLISH((QEvt*)pe, me);
+QACTIVE_POST(AO_RcvMsgDec, (QEvt*)pe, me);
+</action>
+       <choice_glyph conn="15,17,5,-1,22">
+        <action box="2,-3,24,2"/>
+       </choice_glyph>
+      </choice>
+      <choice>
+       <guard brief="else"/>
+       <action brief="qspy_log">QS_BEGIN(VW_STAT, me) /* application-specific record begin */
+        QS_U8(1, len);
+        QS_MEM(block,XDATA_PACKET_SIZE);
+QS_END()  </action>
+       <choice_glyph conn="15,17,4,-1,9,21">
+        <action box="2,6,15,2"/>
+       </choice_glyph>
+      </choice>
+      <tran_glyph conn="7,17,3,-1,8">
+       <action box="0,-2,10,2"/>
+      </tran_glyph>
+     </tran>
+     <state_glyph node="7,6,38,31"/>
+    </state>
+    <state_diagram size="80,50"/>
+   </statechart>
+  </class>
+  <class name="RcvMsgDec" superclass="qpc::QActive">
+   <documentation>Dekoduje odbebrany komunikat i generuje stosowne sygnały</documentation>
+   <attribute name="lastTimestamp" type="uint32_t" visibility="0x00" properties="0x00">
+    <documentation>Timestamp ostatnio odebranego nowego komunikatu</documentation>
+   </attribute>
+   <operation name="hasIntervalElapsed" type="bool" visibility="0x02" properties="0x00">
+    <parameter name="timestamp" type="uint32_t"/>
+    <code>return ( ((timestamp) - (me-&gt;lastTimestamp)) &gt; (2*BSP_MSG_INTERVAL*BSP_TIMESTAMP_TICKS_PER_SEC));</code>
+   </operation>
+   <statechart properties="QS_FUN_DICT">
+    <initial target="../1">
+     <action>//QActive_subscribe(&amp;me-&gt;super, MSG_SIG);
+
+me-&gt;lastTimestamp = 0;
+(void)e;
+
+QS_OBJ_DICTIONARY(AO_RcvMsgDec);</action>
+     <initial_glyph conn="8,3,5,0,9,3">
+      <action box="0,-2,10,2"/>
+     </initial_glyph>
+    </initial>
+    <state name="decoder">
+     <tran trig="MSG">
+      <choice>
+       <guard brief="else"/>
+       <action brief="pub_duplicate">QS_BEGIN(DUP_STAT,me)
+    QS_U32(0, Q_EVT_CAST(MsgEvt)-&gt; timestamp); 
+    QS_U8(0, Q_EVT_CAST(MsgEvt)-&gt;msgLen); 
+    QS_MEM(Q_EVT_CAST(MsgEvt)-&gt;msg,Q_EVT_CAST(MsgEvt)-&gt;msgLen); 
+QS_END()   
+
+//MsgEvt *pe = Q_NEW(QEvt, DUPLICATE_SIG);
+
+//publikuj msg
+//QF_PUBLISH((QEvt*)pe, me);</action>
+       <choice_glyph conn="14,12,5,-1,12">
+        <action box="4,-3,19,2"/>
+       </choice_glyph>
+      </choice>
+      <choice>
+       <guard brief="new_msg">isNewMsg(Q_EVT_CAST(MsgEvt)-&gt;msg,
+        Q_EVT_CAST(MsgEvt)-&gt;msgLen)
+||  RcvMsgDec_hasIntervalElapsed(me,Q_EVT_CAST(MsgEvt)-&gt; timestamp)</guard>
+       <action>
+me-&gt;lastTimestamp = Q_EVT_CAST(MsgEvt)-&gt; timestamp;
+</action>
+       <choice>
+        <guard brief="else"/>
+        <action brief="pub_halt">QS_BEGIN(HALT_STAT,me)
+    QS_U32(0, Q_EVT_CAST(MsgEvt)-&gt; timestamp); 
+    QS_U8(0, Q_EVT_CAST(MsgEvt)-&gt;msgLen); 
+    QS_MEM(Q_EVT_CAST(MsgEvt)-&gt;msg,Q_EVT_CAST(MsgEvt)-&gt;msgLen); 
+QS_END()   
+
+QF_PUBLISH(Q_NEW(QEvt,TX_HALT_SIG), me);
+
+//jeśli HALT wartości baterii i temperatury nie mają 
+// znaczenia</action>
+        <choice_glyph conn="14,20,5,-1,12">
+         <action box="5,-3,18,2"/>
+        </choice_glyph>
+       </choice>
+       <choice>
+        <guard brief="not_halt">! isHalt(    Q_EVT_CAST(MsgEvt)-&gt;msg, 
+                Q_EVT_CAST(MsgEvt)-&gt;msgLen)</guard>
+        <action brief="pub_batt">
+//przekaż komunikat do zdekodowania napięcia baterii
+QACTIVE_POST(AO_RcvBatDec, (QEvt*)e, me);
+
+uint8_t errCode = 
+        getErr( ((MsgEvt const *)e)-&gt;msg, 
+                ((MsgEvt const*)e)-&gt;msgLen);
+</action>
+        <choice>
+         <guard brief="else"/>
+         <action brief="pub_tmp">QACTIVE_POST(AO_RcvTempDec, (QEvt*)e, me);</action>
+         <choice_glyph conn="14,28,5,-1,12">
+          <action box="5,-3,17,2"/>
+         </choice_glyph>
+        </choice>
+        <choice>
+         <guard brief="tx_err">errCode</guard>
+         <action brief="pub_tx_err">
+//Tx Error
+ErrEvt *pe = Q_NEW(ErrEvt, TX_ERR_SIG);
+pe-&gt;errCode = errCode;
+QF_PUBLISH((QEvt*)pe, me);
+</action>
+         <choice>
+          <guard brief="else"/>
+          <action brief="discard_temp_val">
+QS_BEGIN(VALERR_STAT,me)
+    QS_U8(0, errCode); 
+QS_END()   
+
+//błędy związane z magistralą 1wire unieważniają wartość
+//temperatury przesłaną w komunikacie</action>
+          <choice_glyph conn="14,37,5,-1,12">
+           <action box="5,-2,19,2"/>
+          </choice_glyph>
+         </choice>
+         <choice>
+          <guard brief="not_value_err">! isValErr( Q_EVT_CAST(MsgEvt)-&gt;msg,
+                              Q_EVT_CAST(MsgEvt)-&gt;msgLen)</guard>
+          <action brief="pub_tmp">//błędy związane z resetem nie wpływają na prawidłowość
+//odczytu czujnika
+QACTIVE_POST(AO_RcvTempDec, (QEvt*)e, me);</action>
+          <choice_glyph conn="14,37,4,-1,8,13">
+           <action box="0,3,22,2"/>
+          </choice_glyph>
+         </choice>
+         <choice_glyph conn="14,28,4,-1,9">
+          <action box="0,3,18,2"/>
+         </choice_glyph>
+        </choice>
+        <choice_glyph conn="14,20,4,-1,8">
+         <action box="0,2,15,2"/>
+        </choice_glyph>
+       </choice>
+       <choice_glyph conn="14,12,4,-1,8">
+        <action box="0,2,16,2"/>
+       </choice_glyph>
+      </choice>
+      <tran_glyph conn="5,12,3,-1,9">
+       <action box="0,-2,10,2"/>
+      </tran_glyph>
+     </tran>
+     <state_glyph node="5,6,34,42"/>
+    </state>
+    <state_diagram size="80,50"/>
+   </statechart>
+  </class>
+  <class name="RcvBatDec" superclass="qpc::QActive">
+   <statechart properties="QS_FUN_DICT">
+    <initial target="../1">
+     <action>(void)e;
+
+QS_OBJ_DICTIONARY(AO_RcvBatDec);</action>
+     <initial_glyph conn="19,8,5,0,1,7">
+      <action box="0,-2,10,2"/>
+     </initial_glyph>
+    </initial>
+    <state name="decoder">
+     <tran trig="MSG">
+      <action>int16_t value;
+uint8_t denom;
+
+getBatt(    ((MsgEvt const *)e)-&gt;msg, 
+                  ((MsgEvt const *)e)-&gt;msgLen,
+                   &amp;value,
+                   &amp;denom );
+ValEvt *pe = Q_NEW(ValEvt, BATT_SIG);
+pe-&gt;value = value;
+pe-&gt;denom = denom;
+
+QF_PUBLISH((QEvt*)pe, me);</action>
+      <tran_glyph conn="9,30,3,-1,19">
+       <action box="0,-2,10,2"/>
+      </tran_glyph>
+     </tran>
+     <state_glyph node="9,15,28,23"/>
+    </state>
+    <state_diagram size="80,50"/>
+   </statechart>
+  </class>
+  <class name="RcvTempDec" superclass="qpc::QActive">
+   <statechart properties="QS_FUN_DICT">
+    <initial target="../1">
+     <action>(void)e;
+
+QS_OBJ_DICTIONARY(AO_RcvTempDec);</action>
+     <initial_glyph conn="22,4,5,0,-4,8">
+      <action box="0,-2,10,2"/>
+     </initial_glyph>
+    </initial>
+    <state name="decoder">
+     <tran trig="MSG">
+      <action>int16_t value;
+uint8_t denom;
+
+getTemp(     ((MsgEvt const *)e)-&gt;msg, 
+                          ((MsgEvt const *)e)-&gt;msgLen,
+                            &amp;value,
+                            &amp;denom );
+ValEvt *pe = Q_NEW(ValEvt, OTEMP_SIG);
+pe-&gt;value = value;
+pe-&gt;denom = denom;
+
+QF_PUBLISH((QEvt*)pe, me);</action>
+      <tran_glyph conn="9,20,3,-1,13">
+       <action box="0,-2,10,2"/>
+      </tran_glyph>
+     </tran>
+     <state_glyph node="9,12,18,13"/>
+    </state>
+    <state_diagram size="80,50"/>
+   </statechart>
+  </class>
+  <class name="SerDisp" superclass="qpc::QActive">
+   <documentation>Obsługa wyświetlacza 7 segm. na SCT2024</documentation>
+   <attribute name="timeoutEvt" type="QTimeEvt" visibility="0x02" properties="0x00">
+    <documentation>Odmierzanie czasu ważności wyświetlanej temperatury</documentation>
+   </attribute>
+   <attribute name="blinkEvt" type="QTimeEvt" visibility="0x02" properties="0x00">
+    <documentation>Miganie wyświetlacza dla wartości temperatury otrzymanej dawno</documentation>
+   </attribute>
+   <attribute name="orthoBlinkEvt" type="QTimeEvt" visibility="0x02" properties="0x00">
+    <documentation>Timer realizujący migotanie wskaźnika błędu</documentation>
+   </attribute>
+   <attribute name="lastRoundTemp" type="int16_t" visibility="0x02" properties="0x00"/>
+   <attribute name="orthoCompPtr" type="QHsm *" visibility="0x02" properties="0x00"/>
+   <operation name="roundValue" type="int16_t" visibility="0x02" properties="0x00">
+    <parameter name="val" type="int16_t"/>
+    <parameter name="den" type="uint8_t"/>
+    <code>(void)me;
+uint16_t value, rest=0;
+
+if(val == INT16_MIN)
+{
+    value = INT16_MAX + 1U;
+}
+else if( val&lt;0 )
+{
+    value = - val;
+}
+else
+    value = val;
+
+while(den--)
+{
+    rest = value % 10;
+    value /= 10;
+}
+
+value += (rest&gt;=5);
+return ((val&lt;0)?-value:value);
+
+
+//int16_t minus = 1;
+//int16_t value = val;
+//int16_t tmp_val;
+//int16_t tmp_rest;
+
+//if(value&lt;0)
+//{
+//    minus = -1;
+//    value *= -1;
+//}
+
+//while(den)
+//{
+//    tmp_val = value / 10;
+//    tmp_rest = value % 10;
+//    value = tmp_val;
+//    den--;
+//}
+
+//tmp_val += (tmp_rest&gt;=5) ?  1 : 0;
+//tmp_val *= minus;
+//return ( tmp_val );</code>
+   </operation>
+   <statechart properties="QS_FUN_DICT">
+    <initial target="../1">
+     <action>(void)e;
+
+QHSM_INIT(me-&gt;orthoCompPtr, (QEvt *)0);
+
+QActive_subscribe(&amp;me-&gt;super, OTEMP_SIG);
+QActive_subscribe(&amp;me-&gt;super, BATT_SIG);
+QActive_subscribe(&amp;me-&gt;super, TX_ERR_SIG);
+QActive_subscribe(&amp;me-&gt;super, ERR_SIG);
+QActive_subscribe(&amp;me-&gt;super, TX_HALT_SIG);
+
+QActive_subscribe(&amp;me-&gt;super, BTN_PRSS_SIG);
+QActive_subscribe(&amp;me-&gt;super, BTN_REL_SIG);
+
+
+me-&gt;lastRoundTemp = NAN;
+
+QS_OBJ_DICTIONARY(AO_SerDisp);</action>
+     <initial_glyph conn="8,2,5,0,10,9">
+      <action box="0,-2,10,2"/>
+     </initial_glyph>
+    </initial>
+    <state name="display">
+     <initial target="../8">
+      <initial_glyph conn="8,33,5,0,8,5">
+       <action box="0,-2,10,2"/>
+      </initial_glyph>
+     </initial>
+     <tran trig="TX_HALT">
+      <action brief="forward">QHSM_DISPATCH(me-&gt;orthoCompPtr, (QEvt *)e); /* direct dispatch */</action>
+      <tran_glyph conn="5,18,3,-1,18">
+       <action box="0,-2,17,2"/>
+      </tran_glyph>
+     </tran>
+     <tran trig="TX_ERR">
+      <action brief="forward">QHSM_DISPATCH(me-&gt;orthoCompPtr, (QEvt *)e); /* direct dispatch */</action>
+      <tran_glyph conn="5,20,3,-1,18">
+       <action box="0,-2,17,2"/>
+      </tran_glyph>
+     </tran>
+     <tran trig="ERR">
+      <action brief="forward">QHSM_DISPATCH(me-&gt;orthoCompPtr, (QEvt *)e); /* direct dispatch */</action>
+      <tran_glyph conn="5,22,3,-1,18">
+       <action box="0,-2,17,2"/>
+      </tran_glyph>
+     </tran>
+     <tran trig="BATT">
+      <action brief="forward">QHSM_DISPATCH(me-&gt;orthoCompPtr, (QEvt *)e); /* direct dispatch */</action>
+      <tran_glyph conn="5,24,3,-1,18">
+       <action box="0,-2,17,2"/>
+      </tran_glyph>
+     </tran>
+     <tran trig="ORTHO_BLINK">
+      <action brief="forward">QHSM_DISPATCH(me-&gt;orthoCompPtr, (QEvt *)e); /* direct dispatch */</action>
+      <tran_glyph conn="5,27,3,-1,21">
+       <action box="0,-2,21,2"/>
+      </tran_glyph>
+     </tran>
+     <state name="blink">
+      <entry brief="arm period">QTimeEvt_armX(&amp;me-&gt;blinkEvt,  BLINK_DISPLAY, BLINK_DISPLAY);</entry>
+      <exit brief="disarm">QTimeEvt_disarm(&amp;me-&gt;blinkEvt);</exit>
+      <initial target="../5">
+       <initial_glyph conn="49,42,4,3,4,3">
+        <action box="0,-2,10,2"/>
+       </initial_glyph>
+      </initial>
+      <tran trig="TIMEOUT" target="../../8">
+       <action brief="save nan">me-&gt;lastRoundTemp = NAN;</action>
+       <tran_glyph conn="47,53,3,1,-15">
+        <action box="-15,-2,16,2"/>
+       </tran_glyph>
+      </tran>
+      <tran trig="BTN_PRSS" target="../../7/3">
+       <action brief="forward">QHSM_DISPATCH(me-&gt;orthoCompPtr, (QEvt *)e); /* direct dispatch */</action>
+       <tran_glyph conn="61,63,2,0,14">
+        <action box="-6,-2,17,2"/>
+       </tran_glyph>
+      </tran>
+      <tran trig="OTEMP" target="../../8">
+       <action brief="save,rearm">
+me-&gt;lastRoundTemp =
+    SerDisp_roundValue(me,
+            Q_EVT_CAST(ValEvt)-&gt;value,
+            Q_EVT_CAST(ValEvt)-&gt;denom);
+
+QTimeEvt_rearm(&amp;me-&gt;timeoutEvt,  ASSUME_AGED);
+</action>
+       <tran_glyph conn="47,56,3,1,-15">
+        <action box="-15,-2,16,2"/>
+       </tran_glyph>
+      </tran>
+      <state name="blink_on">
+       <entry brief="update saved">led_display_number(me-&gt;lastRoundTemp, 10);
+led_show();</entry>
+       <tran trig="DISP_BLINK" target="../../5">
+        <tran_glyph conn="64,37,1,1,4,13,-4">
+         <action box="-11,-2,10,2"/>
+        </tran_glyph>
+       </tran>
+       <state_glyph node="52,28,12,13">
+        <entry box="1,2,10,4"/>
+       </state_glyph>
+      </state>
+      <state name="blink_off">
+       <entry brief="update empty">led_clear_buff();
+led_show();</entry>
+       <tran trig="DISP_BLINK" target="../../4">
+        <tran_glyph conn="64,54,1,1,6,-21,-6">
+         <action box="-11,-2,10,2"/>
+        </tran_glyph>
+       </tran>
+       <state_glyph node="52,44,12,14">
+        <entry box="1,2,10,4"/>
+       </state_glyph>
+      </state>
+      <state_glyph node="47,20,25,43">
+       <entry box="1,2,7,2"/>
+       <exit box="1,4,10,2"/>
+      </state_glyph>
+     </state>
+     <state name="handover">
+      <documentation>sterowanie wyświetlaczem przekazane do komponentu ortogonalnego</documentation>
+      <tran trig="TIMEOUT" target="../3">
+       <action brief="arm">QTimeEvt_armX(&amp;me-&gt;timeoutEvt,  ASSUME_OUTDATED-ASSUME_AGED, 0U);</action>
+       <tran_glyph conn="10,81,3,3,35">
+        <action box="0,-2,13,2"/>
+       </tran_glyph>
+      </tran>
+      <tran trig="BTN_REL" target="../../8">
+       <action brief="forward">QHSM_DISPATCH(me-&gt;orthoCompPtr, (QEvt *)e); /* direct dispatch */</action>
+       <tran_glyph conn="24,70,0,2,-7">
+        <action box="-3,2,16,2"/>
+       </tran_glyph>
+      </tran>
+      <tran trig="OTEMP">
+       <action brief="save,(re)arm">
+me-&gt;lastRoundTemp =
+    SerDisp_roundValue(me,
+            Q_EVT_CAST(ValEvt)-&gt;value,
+            Q_EVT_CAST(ValEvt)-&gt;denom);
+
+QTimeEvt_rearm(&amp;me-&gt;timeoutEvt,  ASSUME_AGED);
+</action>
+       <tran_glyph conn="10,78,3,-1,17">
+        <action box="0,-2,19,2"/>
+       </tran_glyph>
+      </tran>
+      <state name="handover_blink">
+       <documentation>sterowanie wyświetlaczem przekazane do komponentu ortogonalnego</documentation>
+       <tran trig="BTN_REL" target="../../../6">
+        <action brief="forward">QHSM_DISPATCH(me-&gt;orthoCompPtr, (QEvt *)e); /* direct dispatch */</action>
+        <tran_glyph conn="66,77,0,2,-14">
+         <action box="-8,2,16,2"/>
+        </tran_glyph>
+       </tran>
+       <tran trig="TIMEOUT" target="../..">
+        <action brief="save nan">me-&gt;lastRoundTemp = NAN;</action>
+        <tran_glyph conn="45,84,3,3,-35">
+         <action box="-9,-2,16,2"/>
+        </tran_glyph>
+       </tran>
+       <tran trig="OTEMP" target="../..">
+        <action brief="save,rearm">
+me-&gt;lastRoundTemp =
+    SerDisp_roundValue(me,
+            Q_EVT_CAST(ValEvt)-&gt;value,
+            Q_EVT_CAST(ValEvt)-&gt;denom);
+
+QTimeEvt_rearm(&amp;me-&gt;timeoutEvt,  ASSUME_AGED);
+</action>
+        <tran_glyph conn="45,87,3,3,-35">
+         <action box="-9,-2,15,2"/>
+        </tran_glyph>
+       </tran>
+       <state_glyph node="45,77,24,13"/>
+      </state>
+      <state_glyph node="10,70,62,23"/>
+     </state>
+     <state name="run">
+      <entry brief="update">
+led_display_number(me-&gt;lastRoundTemp, 10);
+led_show();
+</entry>
+      <tran trig="BTN_PRSS" target="../../7">
+       <action brief="forward">QHSM_DISPATCH(me-&gt;orthoCompPtr, (QEvt *)e); /* direct dispatch */</action>
+       <tran_glyph conn="19,63,2,0,7">
+        <action box="-7,-3,18,2"/>
+       </tran_glyph>
+      </tran>
+      <tran trig="TIMEOUT" target="../../6">
+       <action brief="arm">QTimeEvt_armX(&amp;me-&gt;timeoutEvt,  ASSUME_OUTDATED-ASSUME_AGED, 0U);</action>
+       <tran_glyph conn="32,51,1,3,15">
+        <action box="0,-2,14,2"/>
+       </tran_glyph>
+      </tran>
+      <tran trig="OTEMP">
+       <action brief="(re)arm">
+int16_t tmp = SerDisp_roundValue(me,
+            Q_EVT_CAST(ValEvt)-&gt;value,
+            Q_EVT_CAST(ValEvt)-&gt;denom);
+
+//timer może być uzbrojony lub nie
+QTimeEvt_rearm(&amp;me-&gt;timeoutEvt,  ASSUME_AGED);
+</action>
+       <choice>
+        <guard brief="new_value">//(Q_EVT_CAST(ValEvt)-&gt;value) != me-&gt;lastTemp
+//|| (Q_EVT_CAST(ValEvt)-&gt;denom) != me-&gt;lastTempDenom
+tmp != me-&gt;lastRoundTemp</guard>
+        <action brief="save,update">//me-&gt;lastTemp = (Q_EVT_CAST(ValEvt)-&gt;value);
+//me-&gt;lastTempDenom = (Q_EVT_CAST(ValEvt)-&gt;denom);
+
+me-&gt;lastRoundTemp = tmp;
+
+//aktualizuj wyświetlacz
+led_display_number(me-&gt;lastRoundTemp, 10);
+led_show();</action>
+        <choice_glyph conn="12,51,5,-1,15">
+         <action box="1,-2,21,2"/>
+        </choice_glyph>
+       </choice>
+       <choice>
+        <guard brief="else"/>
+        <choice_glyph conn="12,51,4,-1,3,15">
+         <action box="1,1,10,2"/>
+        </choice_glyph>
+       </choice>
+       <tran_glyph conn="10,47,3,-1,2,4">
+        <action box="0,-2,15,2"/>
+       </tran_glyph>
+      </tran>
+      <state_glyph node="10,38,22,25">
+       <entry box="1,2,10,2"/>
+      </state_glyph>
+     </state>
+     <state_glyph node="5,11,70,86"/>
+    </state>
+    <state_diagram size="80,98"/>
+   </statechart>
+  </class>
+  <class name="SerDispErr" superclass="qpc::QHsm">
+   <documentation>Orthogonal component of AO SerDisp realizing singalization and display of errors and battery level of transmitter and errors of receiver.</documentation>
+   <attribute name="batt" type="int16_t" visibility="0x02" properties="0x00"/>
+   <attribute name="txHalt" type="uint8_t" visibility="0x02" properties="0x00"/>
+   <attribute name="txErr" type="uint8_t" visibility="0x02" properties="0x00"/>
+   <attribute name="err" type="uint8_t" visibility="0x02" properties="0x00"/>
+   <attribute name="blinkEvtPtr" type="QTimeEvt *" visibility="0x02" properties="0x00"/>
+   <statechart properties="QS_FUN_DICT">
+    <initial target="../1/6">
+     <action>(void)e;
+
+me-&gt;batt = NANB;
+me-&gt;txHalt = 0;
+me-&gt;txErr = 0;
+me-&gt;err = 0;
+
+
+QS_OBJ_DICTIONARY(&amp;l_serDispErr);</action>
+     <initial_glyph conn="3,2,4,3,23,5">
+      <action box="0,-2,10,2"/>
+     </initial_glyph>
+    </initial>
+    <state name="container">
+     <tran trig="BATT">
+      <action brief="save">me-&gt;batt =  Q_EVT_CAST(ValEvt)-&gt;value;</action>
+      <tran_glyph conn="5,8,3,-1,17">
+       <action box="0,-2,10,2"/>
+      </tran_glyph>
+     </tran>
+     <tran trig="TX_HALT">
+      <action brief="save">me-&gt;txHalt = 1;</action>
+      <tran_glyph conn="5,10,3,-1,17">
+       <action box="0,-2,13,2"/>
+      </tran_glyph>
+     </tran>
+     <tran trig="TX_ERR">
+      <action brief="save">me-&gt;txErr |= Q_EVT_CAST(ErrEvt)-&gt;errCode;</action>
+      <tran_glyph conn="5,12,3,-1,17">
+       <action box="0,-2,14,2"/>
+      </tran_glyph>
+     </tran>
+     <tran trig="ERR">
+      <action brief="save">me-&gt;err |= Q_EVT_CAST(ErrEvt)-&gt;errCode;</action>
+      <tran_glyph conn="5,14,3,-1,17">
+       <action box="0,-2,10,2"/>
+      </tran_glyph>
+     </tran>
+     <tran trig="BTN_PRSS">
+      <choice target="../../8/0">
+       <guard brief="halt">me-&gt;txHalt</guard>
+       <choice_glyph conn="15,55,5,3,10">
+        <action box="1,-2,26,2"/>
+       </choice_glyph>
+      </choice>
+      <choice>
+       <guard brief="else"/>
+       <choice target="../../../8/1">
+        <guard brief="tx_err">me-&gt;txErr</guard>
+        <choice_glyph conn="15,63,5,3,10">
+         <action box="1,-2,29,2"/>
+        </choice_glyph>
+       </choice>
+       <choice>
+        <guard brief="else"/>
+        <choice target="../../../../8/2">
+         <guard brief="err">me-&gt;err</guard>
+         <choice_glyph conn="15,70,5,3,10">
+          <action box="1,-2,26,2"/>
+         </choice_glyph>
+        </choice>
+        <choice target="../../../../9">
+         <guard brief="else"/>
+         <choice_glyph conn="15,70,4,3,8,10">
+          <action box="0,5,25,2"/>
+         </choice_glyph>
+        </choice>
+        <choice_glyph conn="15,63,4,-1,7">
+         <action box="1,0,10,2"/>
+        </choice_glyph>
+       </choice>
+       <choice_glyph conn="15,55,4,-1,8">
+        <action box="1,0,10,2"/>
+       </choice_glyph>
+      </choice>
+      <tran_glyph conn="5,55,3,-1,10">
+       <action box="0,-2,10,2"/>
+      </tran_glyph>
+     </tran>
+     <tran trig="BTN_REL">
+      <choice target="../../7/1">
+       <guard brief="is_error">me-&gt;txHalt || me-&gt;txErr || me-&gt;err</guard>
+       <choice_glyph conn="15,40,5,3,15">
+        <action box="2,-2,10,2"/>
+       </choice_glyph>
+      </choice>
+      <choice target="../../6">
+       <guard brief="else"/>
+       <choice_glyph conn="15,40,4,2,-6">
+        <action box="0,-5,10,2"/>
+       </choice_glyph>
+      </choice>
+      <tran_glyph conn="5,40,3,-1,10">
+       <action box="0,-2,10,2"/>
+      </tran_glyph>
+     </tran>
+     <state name="idle">
+      <tran trig="TX_HALT" target="../../7/1">
+       <action brief="save">me-&gt;txHalt = 1;</action>
+       <tran_glyph conn="21,26,1,3,9">
+        <action box="-12,-2,12,2"/>
+       </tran_glyph>
+      </tran>
+      <tran trig="TX_ERR" target="../../7/1">
+       <action brief="save">me-&gt;txErr |= Q_EVT_CAST(ErrEvt)-&gt;errCode;</action>
+       <tran_glyph conn="21,29,1,3,9">
+        <action box="-12,-2,14,2"/>
+       </tran_glyph>
+      </tran>
+      <tran trig="ERR" target="../../7/1">
+       <action brief="save">me-&gt;err |= Q_EVT_CAST(ErrEvt)-&gt;errCode;</action>
+       <tran_glyph conn="21,32,1,3,9">
+        <action box="-12,-2,10,2"/>
+       </tran_glyph>
+      </tran>
+      <state_glyph node="8,21,13,13"/>
+     </state>
+     <state name="error">
+      <exit brief="disarm">QTimeEvt_disarm(me-&gt;blinkEvtPtr);</exit>
+      <tran trig="ORTHO_BLINK" target="../1">
+       <tran_glyph conn="58,27,1,1,-12">
+        <action box="-11,-2,15,2"/>
+       </tran_glyph>
+      </tran>
+      <state name="on">
+       <entry brief="arm once, led on">led_notify_error(true);
+led_show();
+QTimeEvt_armX(me-&gt;blinkEvtPtr,  LED_ON, 0U);</entry>
+       <exit brief="led off">led_notify_error(false);
+led_show();</exit>
+       <tran trig="ORTHO_BLINK" target="../..">
+        <action brief="arm once">QTimeEvt_armX(me-&gt;blinkEvtPtr,  LED_OFF, 0U);</action>
+        <tran_glyph conn="46,31,1,1,12">
+         <action box="-11,-2,21,2"/>
+        </tran_glyph>
+       </tran>
+       <state_glyph node="30,18,16,23">
+        <entry box="1,2,14,2"/>
+        <exit box="1,4,15,2"/>
+       </state_glyph>
+      </state>
+      <state_glyph node="27,11,31,32">
+       <exit box="1,2,9,2"/>
+      </state_glyph>
+     </state>
+     <state name="display">
+      <exit brief="led off">led_notify_error(false);
+led_show();</exit>
+      <state name="dsp_halt">
+       <entry brief="displ.&amp;rst halt; err:1, minus:0">led_msg(HALT_MSG);
+led_notify_error(true);
+led_show();
+
+me-&gt;txHalt = 0;</entry>
+       <state_glyph node="25,52,27,6">
+        <entry box="1,2,24,2"/>
+       </state_glyph>
+      </state>
+      <state name="dsp_txerr">
+       <entry brief="displ.&amp;rst tx_errt; err:1, minus:0">led_display_number(me-&gt;txErr, 16);
+//led_display_number((me-&gt;txErr)*-1, 16); //test
+led_notify_error(true);
+led_show();
+
+me-&gt;txErr = 0;</entry>
+       <state_glyph node="25,60,27,6">
+        <entry box="1,2,25,2"/>
+       </state_glyph>
+      </state>
+      <state name="dsp_err">
+       <entry brief="displ.&amp;rst errt; err:1, minus:1, reset err">//zmieniamy znak by włączyć LED MINUS
+led_display_number((me-&gt;err)*-1, 16);
+led_notify_error(true);
+led_show();
+
+//czyszczenie przyczyny błędu, który spowodował restart
+//Watchdog error nie potrzebuje czyszczenia,
+//Assert failed trzeba z kolei przeczytać w debugerze
+if( (me-&gt;err!=ERR_ASSERT_FAILED) &amp;&amp; (me-&gt;err != ERR_WD_RESET))
+    rerr_reset();
+
+me-&gt;err = 0;</entry>
+       <state_glyph node="25,68,27,6">
+        <entry box="1,2,26,2"/>
+       </state_glyph>
+      </state>
+      <state_glyph node="22,46,36,29">
+       <exit box="1,2,6,2"/>
+      </state_glyph>
+     </state>
+     <state name="dsp_batt">
+      <entry brief="display battt; err:0, minus:0">led_display_number(me-&gt;batt, 10);
+//led_notify_error(false);
+led_show();</entry>
+      <state_glyph node="25,76,27,6">
+       <entry box="1,2,24,2"/>
+      </state_glyph>
+     </state>
+     <state_glyph node="5,4,63,82"/>
+    </state>
+    <state_diagram size="80,98"/>
+   </statechart>
+  </class>
+  <class name="Control" superclass="qpc::QActive">
+   <attribute name="timeout" type="QTimeEvt" visibility="0x02" properties="0x00"/>
+   <statechart properties="QS_FUN_DICT">
+    <initial target="../1">
+     <action>QS_OBJ_DICTIONARY(AO_Control);
+(void)e;</action>
+     <initial_glyph conn="28,7,4,0,7">
+      <action box="0,-2,10,2"/>
+     </initial_glyph>
+    </initial>
+    <state name="ctrl">
+     <entry brief="arm">QTimeEvt_armX(&amp;me-&gt;timeout,  WD_TIMEOUT_TICKS, WD_TIMEOUT_TICKS);</entry>
+     <tran trig="TIMEOUT">
+      <action brief="kick wd">iwdg_reset();</action>
+      <tran_glyph conn="13,26,3,-1,23">
+       <action box="0,-2,21,2"/>
+      </tran_glyph>
+     </tran>
+     <state_glyph node="13,14,30,22">
+      <entry box="1,2,9,2"/>
+     </state_glyph>
+    </state>
+    <state_diagram size="80,50"/>
+   </statechart>
+  </class>
+  <attribute name="AO_SerDisp" type="QActive * const" visibility="0x00" properties="0x00">
+   <code>= &amp;l_serDisp.super;</code>
+  </attribute>
+  <attribute name="the_Ticker0" type="QActive * const" visibility="0x00" properties="0x00">
+   <documentation>Software timer for tickrate 0 (SOFT_TICKRATE_0)</documentation>
+   <code>= &amp;l_ticker0;</code>
+  </attribute>
+  <attribute name="AO_Control" type="QActive * const" visibility="0x00" properties="0x00">
+   <code>= &amp;l_control.super;</code>
+  </attribute>
+  <operation name="Rcv_ctor" type="void" visibility="0x00" properties="0x00">
+   <code>Rcv * const me = &amp;l_rcv;
+
+QActive_ctor(&amp;me-&gt;super, Q_STATE_CAST(&amp;Rcv_initial));
+
+//QMPool_init(    &amp;msgPool, 
+//                            memPoolSto,
+//                            sizeof(memPoolSto),
+//                            VW_MAX_MESSAGE_LEN);</code>
+  </operation>
+  <operation name="RcvMsgDec_ctor" type="void" visibility="0x00" properties="0x00">
+   <code>RcvMsgDec * const me = &amp;l_rcvMsgDec;
+
+QActive_ctor(&amp;me-&gt;super, Q_STATE_CAST(&amp;RcvMsgDec_initial));
+</code>
+  </operation>
+  <operation name="RcvBatDec_ctor" type="void" visibility="0x00" properties="0x00">
+   <code>RcvBatDec * const me = &amp;l_rcvBatDec;
+
+QActive_ctor(&amp;me-&gt;super, Q_STATE_CAST(&amp;RcvBatDec_initial));
+</code>
+  </operation>
+  <operation name="RcvTempDec_ctor" type="void" visibility="0x00" properties="0x00">
+   <code>RcvTempDec * const me = &amp;l_rcvTempDec;
+
+QActive_ctor(&amp;me-&gt;super, Q_STATE_CAST(&amp;RcvTempDec_initial));
+</code>
+  </operation>
+  <operation name="SerDisp_ctor" type="void" visibility="0x00" properties="0x00">
+   <code>SerDisp * const me = &amp;l_serDisp;
+
+QActive_ctor(&amp;me-&gt;super, Q_STATE_CAST(&amp;SerDisp_initial));
+
+//inicjacja komponentu ortho oraz timera na jego potrzeby
+me-&gt;orthoCompPtr = SerDispErr_ctor(&amp;me-&gt;orthoBlinkEvt);
+QTimeEvt_ctorX(&amp;me-&gt;orthoBlinkEvt, &amp;me-&gt;super, ORTHO_BLINK_SIG, HARD_TICKRATE_1);
+
+//inicjacja timerów
+QTimeEvt_ctorX(&amp;me-&gt;blinkEvt, &amp;me-&gt;super, DISP_BLINK_SIG, HARD_TICKRATE_1);
+//Dla uniknięcia wyścigu ten timer musi być zrealizowany przez obiekt QTimer
+//o priorytecie NIŻSZYM niż AO SerDisp
+QTimeEvt_ctorX(&amp;me-&gt;timeoutEvt, &amp;me-&gt;super, TIMEOUT_SIG, SOFT_TICKRATE_0);</code>
+  </operation>
+  <operation name="SerDispErr_ctor" type="QHsm *" visibility="0x00" properties="0x00">
+   <parameter name="blinkEvt" type="QTimeEvt * const"/>
+   <code>SerDispErr *me = &amp;l_serDispErr;
+
+/* superclass' ctor */
+QHsm_ctor(&amp;me-&gt;super, Q_STATE_CAST(&amp;SerDispErr_initial));
+
+me-&gt;blinkEvtPtr = blinkEvt;
+
+return (QHsm *)me;</code>
+  </operation>
+  <operation name="Control_ctor" type="void" visibility="0x00" properties="0x00">
+   <code>Control * const me = &amp;l_control;
+
+QActive_ctor(&amp;me-&gt;super, Q_STATE_CAST(&amp;Control_initial));
+
+//inicjacja timera
+QTimeEvt_ctorX(&amp;me-&gt;timeout, &amp;me-&gt;super, TIMEOUT_SIG, HARD_TICKRATE_1);</code>
+  </operation>
+ </package>
+ <directory name="qm_src">
+  <file name="project.h" codec="UTF-8">
+   <text>#ifndef project_h
+#define project_h
+
+/* define the event signals used in the application ------------------------*/
+enum ProjectSignals {
+    //Eventy wg typów o rosnącej wielkości
+    //QEvt
+    VW_SIG  = Q_USER_SIG,    //niskopoziomowy sterownik odebrał message (dobry lub zły to się okaże)
+    TX_HALT_SIG,    //nadajnik zraportował nieudany start 
+    BTN_PRSS_SIG,    //przycisk został wciśnięty
+    BTN_REL_SIG,    //przycisk został zwolniony
+
+    //ErrEvt
+    TX_ERR_SIG,    //błędy raportowane przez nadajnik
+    ERR_SIG,            //błędy wewnętrzne firmware
+
+    //ValEvt
+    OTEMP_SIG,  /* odczyt temp czujnika zewn.*/
+    BATT_SIG,    //odczyt napięcia baterii
+
+    //MsgEvt
+    MSG_SIG,    //treść odebranego komunikatu
+
+    MAX_PUB_SIG,          /* the last published signal */
+
+    DISP_BLINK_SIG,    //migotanie wyświetlacza
+    ORTHO_BLINK_SIG,  //ticker dla komponentu ortogonalnego wyświetlacza
+    TIMEOUT_SIG,
+
+    MAX_SIG                     /* the last signal */
+};
+
+/* define symbols */
+#include &quot;protocol.h&quot;
+
+$declare(Events::ValEvt)
+
+$declare(Events::ErrEvt)
+
+$declare(Events::MsgEvt)
+
+
+/* declare other elements... */
+
+#endif /* project_h */</text>
+  </file>
+  <file name="receiver.h" codec="UTF-8">
+   <text>#ifndef receiver_h
+#define receiver_h
+
+/* opaque pointers to AOs */
+extern QActive * const  AO_Rcv;
+extern QActive * const AO_RcvMsgDec;
+extern QActive * const AO_RcvBatDec;
+extern QActive * const AO_RcvTempDec;
+
+$declare(AOs::Rcv_ctor)
+$declare(AOs::RcvMsgDec_ctor)
+$declare(AOs::RcvBatDec_ctor)
+$declare(AOs::RcvTempDec_ctor)
+
+#endif /* receiver_h */</text>
+  </file>
+  <file name="receiver.c" codec="UTF-8">
+   <text>#include &lt;string.h&gt;
+#include &quot;qpc.h&quot;
+#include &quot;bsp.h&quot;
+//#include &quot;app_conf.h&quot;
+#include &quot;link-proto.h&quot;
+#include &quot;VirtualWire.h&quot;
+//#include &quot;datalog.h&quot;
+#include &quot;project.h&quot;
+#include &quot;receiver.h&quot;
+
+
+$declare(AOs::Rcv)
+
+$declare(AOs::RcvMsgDec)
+
+$declare(AOs::RcvBatDec)
+
+$declare(AOs::RcvTempDec)
+
+static Rcv l_rcv;
+QActive * const  AO_Rcv = &amp;l_rcv.super;
+
+static RcvMsgDec l_rcvMsgDec;
+QActive * const AO_RcvMsgDec = &amp;l_rcvMsgDec.super;
+
+static RcvBatDec l_rcvBatDec;
+QActive * const AO_RcvBatDec = &amp;l_rcvBatDec.super;
+
+static RcvTempDec l_rcvTempDec;
+QActive * const AO_RcvTempDec = &amp;l_rcvTempDec.super;
+
+$define(AOs::Rcv_ctor)
+$define(AOs::Rcv)
+
+$define(AOs::RcvMsgDec_ctor)
+$define(AOs::RcvMsgDec)
+
+$define(AOs::RcvBatDec_ctor)
+$define(AOs::RcvBatDec)
+
+$define(AOs::RcvTempDec_ctor)
+$define(AOs::RcvTempDec)</text>
+  </file>
+  <file name="serdisp.c" codec="UTF-8">
+   <text>#include &quot;qpc.h&quot;
+//#include &quot;bsp-serdisp.h&quot;
+#include &quot;bsp.h&quot;
+#include &quot;project.h&quot;
+#include &quot;serdisp.h&quot;
+#include &quot;link-proto.h&quot;
+#include &quot;led7seg.h&quot;
+#include &quot;serdisperr.h&quot;
+#include &lt;limits.h&gt;
+
+Q_DEFINE_THIS_FILE
+
+#define NAN ALL_MINUS
+
+//definicje symboli (poddefinicje są zdefinowane w bsp.h)
+//do ilu sek. od ostatniego msg dana będzie uznana za aktualną
+#define ASSUME_AGED    ((DISPLAY_ASSUME_AGED)*60*BSP_SOFT_TIMER_TICKS_PER_SEC)
+//po ilu sekundach temp. zewnętrzna będzie uznana za całkowicie nieaktualną
+#define ASSUME_OUTDATED  ((DISPLAY_ASSUME_OUTDATED)*60*BSP_SOFT_TIMER_TICKS_PER_SEC)
+//częstotliwość mrugania wyświetlacza dla ASSUME_AGED
+#define BLINK_DISPLAY (BSP_TICKS_PER_SEC/DISPLAY_AGED_BLINK_PER_SEC/2)
+
+/* local objects -----------------------------------------------------------*/
+
+$declare(AOs::SerDisp)
+static SerDisp l_serDisp; /* the sole instance of the SerDisp active object */
+//static QTicker l_ticker0; /* ticker active object for tick rate 0 */
+
+/* Public-scope objects ----------------------------------------------------*/
+
+$define(AOs::AO_SerDisp)
+//$define(AOs::the_Ticker0)
+
+/* Active object definition ================================================*/
+
+$define(AOs::SerDisp_ctor)
+$define(AOs::SerDisp)
+</text>
+  </file>
+  <file name="serdisp.h" codec="UTF-8">
+   <text>#ifndef serdisp_h
+#define serdisp_h
+
+/* symbols definitions */
+
+
+/* active objects' &quot;constructors&quot; */
+
+$declare(AOs::SerDisp_ctor)
+
+/* instantiation of the orthogonal components */
+
+
+/* opaque pointer to AOs */
+
+$declare(AOs::AO_SerDisp)
+//$declare(AOs::the_Ticker0)
+
+#endif /* serdisp_h */</text>
+  </file>
+  <file name="timer.h" codec="UTF-8">
+   <text>#ifndef timer_h
+#define timer_h
+
+/* symbols definitions */
+
+
+/* active objects' &quot;constructors&quot; */
+
+
+/* instantiation of the orthogonal components */
+
+
+/* opaque pointer to AOs */
+
+$declare(AOs::the_Ticker0)
+
+#endif /* timer_h */</text>
+  </file>
+  <file name="timer.c" codec="UTF-8">
+   <text>#include &quot;qpc.h&quot;
+#include &quot;serdisp.h&quot;
+
+Q_DEFINE_THIS_FILE
+
+/* local objects -----------------------------------------------------------*/
+
+static QTicker l_ticker0; /* ticker active object for tick rate 0 */
+
+/* Public-scope objects ----------------------------------------------------*/
+
+$define(AOs::the_Ticker0)
+
+/* Active object definition ================================================*/
+</text>
+  </file>
+  <file name="serdisperr.h" codec="UTF-8">
+   <text>#ifndef serdisperr_h
+#define serdisperr_h
+
+/* symbols definitions */
+
+/* active objects' &quot;constructors&quot; */
+
+$declare(AOs::SerDispErr_ctor)
+
+/* instantiation of the orthogonal components */
+
+
+/* opaque pointer to AOs */
+
+
+#endif /* serdisperr_h */</text>
+  </file>
+  <file name="serdisperr.c" codec="UTF-8">
+   <text>#include &quot;qpc.h&quot;
+#include &quot;bsp.h&quot;
+#include &quot;project.h&quot;
+#include &quot;serdisperr.h&quot;
+//#include &quot;link-proto.h&quot;
+#include &quot;led7seg.h&quot;
+#include &quot;err.h&quot;
+#include &quot;rerror.h&quot;
+
+Q_DEFINE_THIS_FILE
+
+#define NANB ALL_QUESTION
+
+//definicje symboli (poddefinicje są zdefinowane w bsp.h)
+//Czas włączenia diody w razie wystąpienia błędów. W tikach
+#define LED_ON    ERR_NOTICE_ON*BSP_TICKS_PER_SEC/1000
+//Czas przerwy w błyskaniu LED w razie wystąpienia błędów. W tikach
+#define LED_OFF   ERR_NOTICE_OFF*BSP_TICKS_PER_SEC/1000
+
+/* local objects -----------------------------------------------------------*/
+
+$declare(AOs::SerDispErr)
+static SerDispErr l_serDispErr; /* the sole instance of the SerDisp active object */
+
+
+/* Public-scope objects ----------------------------------------------------*/
+
+/* Active object definition ================================================*/
+
+$define(AOs::SerDispErr_ctor)
+$define(AOs::SerDispErr)
+</text>
+  </file>
+  <file name="control.h" codec="UTF-8">
+   <text>#ifndef control_h
+#define control_h
+
+/* symbols definitions */
+
+/* active objects' &quot;constructors&quot; */
+
+$declare(AOs::Control_ctor)
+
+/* instantiation of the orthogonal components */
+
+
+/* opaque pointer to AOs */
+$declare(AOs::AO_Control)
+
+#endif /* control_h */</text>
+  </file>
+  <file name="control.c" codec="UTF-8">
+   <text>#include &quot;qpc.h&quot;
+#include &quot;bsp.h&quot;
+#include &quot;project.h&quot;
+#include &quot;iwdg.h&quot;
+#include &quot;control.h&quot;
+
+Q_DEFINE_THIS_FILE
+
+//definicje symboli (poddefinicje są zdefinowane w app_conf.h)
+#define WD_TIMEOUT_TICKS   (BSP_TICKS_PER_SEC*BSP_WD_TIMEOUT/1000)
+
+/* local objects -----------------------------------------------------------*/
+
+$declare(AOs::Control)
+static Control l_control; /* the sole instance of the SerDisp active object */
+
+
+/* Public-scope objects ----------------------------------------------------*/
+
+$define(AOs::AO_Control)
+//$define(AOs::the_Ticker0)
+
+/* Active object definition ================================================*/
+
+$define(AOs::Control_ctor)
+$define(AOs::Control)</text>
+  </file>
+ </directory>
+</model>
