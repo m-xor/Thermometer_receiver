@@ -8,7 +8,11 @@
   <item name="grid">3</item>
   <item name="backups">0</item>
  </group>
- <group name="windows"/>
+ <group name="windows">
+  <item id="AOs::SerDisp::SM">-319,0,640,480</item>
+  <item id="AOs::RcvTempDec::SM">0,0,321,448</item>
+  <item id="AOs::SerDispErr::SM">0,0,477,448,*</item>
+ </group>
  <group name="search">
   <item name="options">2032128</item>
   <item name="replace">0</item>

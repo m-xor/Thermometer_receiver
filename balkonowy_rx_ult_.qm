@@ -541,38 +541,20 @@ led_show();
        </tran_glyph>
       </tran>
       <tran trig="OTEMP">
-       <action brief="(re)arm">
-int16_t tmp = SerDisp_roundValue(me,
+       <action brief="(re)arm, save, update">
+//timer może być uzbrojony lub nie
+QTimeEvt_rearm(&amp;me-&gt;timeoutEvt,  ASSUME_AGED);
+
+me-&gt;lastRoundTemp = SerDisp_roundValue(me,
             Q_EVT_CAST(ValEvt)-&gt;value,
             Q_EVT_CAST(ValEvt)-&gt;denom);
 
-//timer może być uzbrojony lub nie
-QTimeEvt_rearm(&amp;me-&gt;timeoutEvt,  ASSUME_AGED);
-</action>
-       <choice>
-        <guard brief="new_value">//(Q_EVT_CAST(ValEvt)-&gt;value) != me-&gt;lastTemp
-//|| (Q_EVT_CAST(ValEvt)-&gt;denom) != me-&gt;lastTempDenom
-tmp != me-&gt;lastRoundTemp</guard>
-        <action brief="save,update">//me-&gt;lastTemp = (Q_EVT_CAST(ValEvt)-&gt;value);
-//me-&gt;lastTempDenom = (Q_EVT_CAST(ValEvt)-&gt;denom);
-
-me-&gt;lastRoundTemp = tmp;
-
 //aktualizuj wyświetlacz
 led_display_number(me-&gt;lastRoundTemp, 10);
-led_show();</action>
-        <choice_glyph conn="12,51,5,-1,15">
-         <action box="1,-2,21,2"/>
-        </choice_glyph>
-       </choice>
-       <choice>
-        <guard brief="else"/>
-        <choice_glyph conn="12,51,4,-1,3,15">
-         <action box="1,1,10,2"/>
-        </choice_glyph>
-       </choice>
-       <tran_glyph conn="10,47,3,-1,2,4">
-        <action box="0,-2,15,2"/>
+led_show();
+</action>
+       <tran_glyph conn="10,47,3,-1,19">
+        <action box="0,-2,22,2"/>
        </tran_glyph>
       </tran>
       <state_glyph node="10,38,22,25">

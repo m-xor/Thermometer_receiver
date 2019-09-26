@@ -431,32 +431,18 @@ static QState SerDisp_run(SerDisp * const me, QEvt const * const e) {
         /*${AOs::SerDisp::SM::display::run::OTEMP} */
         case OTEMP_SIG: {
 
-            int16_t tmp = SerDisp_roundValue(me,
-                        Q_EVT_CAST(ValEvt)->value,
-                        Q_EVT_CAST(ValEvt)->denom);
-
             //timer może być uzbrojony lub nie
             QTimeEvt_rearm(&me->timeoutEvt,  ASSUME_AGED);
 
-            /*${AOs::SerDisp::SM::display::run::OTEMP::[new_value]} */
-            if (//(Q_EVT_CAST(ValEvt)->value) != me->lastTemp
-                //|| (Q_EVT_CAST(ValEvt)->denom) != me->lastTempDenom
-                tmp != me->lastRoundTemp)
-            {
-                //me->lastTemp = (Q_EVT_CAST(ValEvt)->value);
-                //me->lastTempDenom = (Q_EVT_CAST(ValEvt)->denom);
+            me->lastRoundTemp = SerDisp_roundValue(me,
+                        Q_EVT_CAST(ValEvt)->value,
+                        Q_EVT_CAST(ValEvt)->denom);
 
-                me->lastRoundTemp = tmp;
+            //aktualizuj wyświetlacz
+            led_display_number(me->lastRoundTemp, 10);
+            led_show();
 
-                //aktualizuj wyświetlacz
-                led_display_number(me->lastRoundTemp, 10);
-                led_show();
-                status_ = Q_HANDLED();
-            }
-            /*${AOs::SerDisp::SM::display::run::OTEMP::[else]} */
-            else {
-                status_ = Q_HANDLED();
-            }
+            status_ = Q_HANDLED();
             break;
         }
         default: {

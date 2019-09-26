@@ -180,17 +180,22 @@ void led_notify_error(bool error)
 void led_msg(uint8_t msgno)
 {
 	static uint8_t const msg[][NUM_DIGITS] = {
-			{ ((uint8_t)((PATTERN_MOD(_BV(B_SEG) | _BV(C_SEG) | _BV(E_SEG) | _BV(F_SEG) | _BV(G_SEG) )) & SEG_MASK)), //H
+			{ /* HA */
+				((uint8_t)((PATTERN_MOD(_BV(B_SEG) | _BV(C_SEG) | _BV(E_SEG) | _BV(F_SEG) | _BV(G_SEG) )) & SEG_MASK)), //H
 				((uint8_t)((PATTERN_MOD(_BV(A_SEG) | _BV(B_SEG) | _BV(C_SEG) | _BV(E_SEG) | _BV(F_SEG) | _BV(G_SEG) )) & SEG_MASK))	//A
 			}
 
 	};
+
+	uint8_t error = buf.array[ERROR_SEG] & _BV(SPEC_SEG); 	//zachowujemy stan errora
 
 	if(msgno < MAX_MSG )
 	{
 			buf.array[0] = msg[msgno][1];
 			buf.array[1] = msg[msgno][0];
 	}
+
+	buf.array[ERROR_SEG] |= error;
 }
 //--------- ustawia jasność ------------------
 void led_set_brigthness(uint8_t brightness)

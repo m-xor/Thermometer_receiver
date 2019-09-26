@@ -1,0 +1,25 @@
+error_codes.txt
+ Created on: 26.09.2019
+     Author: slawek
+
+
+Local (receiver) errors
+Defined in err.h
+-1	NMI occured
+-2	Stack overflow occured
+-4	Hard Fault occured
+-8	Undefined interrupt was called
+-10	Internal error. Check details by rerror variable (see rerror.c)
+-20	Watchdog timer reset occured
+
+Remote (transmitter) errors
+Defined in debug_conf.h
+1	Power On Reset occured
+2	External Reset occured
+4	BOD Reset occured
+8	Watchdog Reset occured
+10	Reset sensor error (no 1wire sensor at all or bus short circuit)
+20	Sensor attached is not 18B20 or there are more than one sensor attached
+40	Bus error (noise?)
+80	CRC error 
+HA	Trasmitter is halted	
