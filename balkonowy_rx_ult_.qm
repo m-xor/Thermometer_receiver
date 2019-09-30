@@ -803,6 +803,87 @@ led_show();</entry>
     <state_diagram size="80,50"/>
    </statechart>
   </class>
+  <class name="Data" superclass="qpc::QActive">
+   <documentation>Saves </documentation>
+   <attribute name="timer" type="QTimeEvt" visibility="0x02" properties="0x00">
+    <documentation>Watching if messages don't drop</documentation>
+   </attribute>
+   <attribute name="delay" type="QTimeEvt" visibility="0x02" properties="0x00">
+    <documentation>margin for messages period</documentation>
+   </attribute>
+   <attribute name="storage[DATA_STOR_SIZE]" type="int16_t" visibility="0x02" properties="0x00">
+    <documentation>Ring buffer</documentation>
+   </attribute>
+   <attribute name="current_index" type="uint16_t" visibility="0x02" properties="0x00"/>
+   <attribute name="denominator" type="uint8_t" visibility="0x02" properties="0x00"/>
+   <operation name="saveData" type="void" visibility="0x02" properties="0x00">
+    <parameter name="value" type="int16_t"/>
+    <parameter name="denominator" type="uint8_t"/>
+    <code>me-&gt;denominator = denominator;
+me-&gt;storage[me-&gt;current_index++] =  value;
+if(me-&gt;current_index &gt;= DATA_STOR_SIZE)
+    me-&gt;current_index = 0;</code>
+   </operation>
+   <statechart properties="QS_FUN_DICT">
+    <initial target="../2">
+     <action>(void)e;
+
+for(int16_t i=0; i&lt;DATA_STOR_SIZE; i++)
+{
+    me-&gt;storage[i] = NAN;
+}
+me-&gt;current_index = 0;
+me-&gt;denominator = 0;
+
+QActive_subscribe(&amp;me-&gt;super, OTEMP_SIG);
+
+QTimeEvt_armX(&amp;me-&gt;timer,  MESSAGE_PERIOD, MESSAGE_PERIOD);
+
+QS_OBJ_DICTIONARY(&amp;l_data);</action>
+     <initial_glyph conn="2,2,4,3,33,7">
+      <action box="0,-2,10,2"/>
+     </initial_glyph>
+    </initial>
+    <state name="delay">
+     <entry brief="arm delay once">QTimeEvt_armX(&amp;me-&gt;delay,  MESSAGE_MARGIN, 0);</entry>
+     <exit brief="compute&amp;publish minmax"/>
+     <tran trig="OTEMP" target="../../2">
+      <action brief="save temp, rearm timer">QTimeEvt_rearm(&amp;me-&gt;timer,  MESSAGE_PERIOD);
+Data_saveData(me,Q_EVT_CAST(ValEvt)-&gt;value, Q_EVT_CAST(ValEvt)-&gt;denom);</action>
+      <tran_glyph conn="37,34,3,1,-12">
+       <action box="0,-2,18,4"/>
+      </tran_glyph>
+     </tran>
+     <tran trig="DELAY_TIMEOUT" target="../../2">
+      <action brief="save drop">Data_saveData(me,NAN, me-&gt;denominator);</action>
+      <tran_glyph conn="37,40,3,1,-12">
+       <action box="0,-2,17,4"/>
+      </tran_glyph>
+     </tran>
+     <state_glyph node="37,23,18,21">
+      <entry box="1,2,14,2"/>
+      <exit box="1,4,17,4"/>
+     </state_glyph>
+    </state>
+    <state name="wait">
+     <tran trig="OTEMP">
+      <action brief="save temp, compute&amp;publish minmax, rearm timer">QTimeEvt_rearm(&amp;me-&gt;timer,  MESSAGE_PERIOD);
+
+Data_saveData(me,Q_EVT_CAST(ValEvt)-&gt;value, Q_EVT_CAST(ValEvt)-&gt;denom);</action>
+      <tran_glyph conn="9,28,3,-1,13">
+       <action box="0,-2,16,7"/>
+      </tran_glyph>
+     </tran>
+     <tran trig="TIMEOUT" target="../../1">
+      <tran_glyph conn="25,28,1,3,12">
+       <action box="0,-2,10,2"/>
+      </tran_glyph>
+     </tran>
+     <state_glyph node="9,23,16,20"/>
+    </state>
+    <state_diagram size="80,50"/>
+   </statechart>
+  </class>
   <attribute name="AO_SerDisp" type="QActive * const" visibility="0x00" properties="0x00">
    <code>= &amp;l_serDisp.super;</code>
   </attribute>
@@ -812,6 +893,9 @@ led_show();</entry>
   </attribute>
   <attribute name="AO_Control" type="QActive * const" visibility="0x00" properties="0x00">
    <code>= &amp;l_control.super;</code>
+  </attribute>
+  <attribute name="AO_Data" type="QActive * const" visibility="0x00" properties="0x00">
+   <code>= &amp;l_data.super;</code>
   </attribute>
   <operation name="Rcv_ctor" type="void" visibility="0x00" properties="0x00">
    <code>Rcv * const me = &amp;l_rcv;
@@ -875,6 +959,15 @@ QActive_ctor(&amp;me-&gt;super, Q_STATE_CAST(&amp;Control_initial));
 //inicjacja timera
 QTimeEvt_ctorX(&amp;me-&gt;timeout, &amp;me-&gt;super, TIMEOUT_SIG, HARD_TICKRATE_1);</code>
   </operation>
+  <operation name="Data_ctor" type="void" visibility="0x00" properties="0x00">
+   <code>Data * const me = &amp;l_data;
+
+QActive_ctor(&amp;me-&gt;super, Q_STATE_CAST(&amp;Data_initial));
+
+//inicjacja timera
+QTimeEvt_ctorX(&amp;me-&gt;timer, &amp;me-&gt;super, TIMEOUT_SIG, SOFT_TICKRATE_0);
+QTimeEvt_ctorX(&amp;me-&gt;delay, &amp;me-&gt;super, DELAY_TIMEOUT_SIG, HARD_TICKRATE_1);</code>
+  </operation>
  </package>
  <directory name="qm_src">
   <file name="project.h" codec="UTF-8">
@@ -905,6 +998,7 @@ enum ProjectSignals {
 
     DISP_BLINK_SIG,    //migotanie wyświetlacza
     ORTHO_BLINK_SIG,  //ticker dla komponentu ortogonalnego wyświetlacza
+    DELAY_TIMEOUT_SIG,    //AO_Data drop outs detection
     TIMEOUT_SIG,
 
     MAX_SIG                     /* the last signal */
@@ -1179,6 +1273,59 @@ $define(AOs::AO_Control)
 
 $define(AOs::Control_ctor)
 $define(AOs::Control)</text>
+  </file>
+  <file name="data.h" codec="UTF-8">
+   <text>#ifndef data_h
+#define data_h
+
+/* symbols definitions */
+
+/* active objects' &quot;constructors&quot; */
+
+$declare(AOs::Data_ctor)
+
+/* instantiation of the orthogonal components */
+
+
+/* opaque pointer to AOs */
+$declare(AOs::AO_Data)
+
+#endif /* data_h */</text>
+  </file>
+  <file name="data.c" codec="UTF-8">
+   <text>#include &quot;qpc.h&quot;
+//#include &quot;bsp.h&quot;
+#include &quot;app_conf.h&quot;
+#include &quot;protocol.h&quot;
+#include &quot;project.h&quot;
+#include &quot;data.h&quot;
+
+Q_DEFINE_THIS_FILE
+
+//definicje symboli (poddefinicje są zdefinowane w app_conf.h)
+
+#define MESSAGE_PERIOD (BSP_MSG_INTERVAL * BSP_SOFT_TIMER_TICKS_PER_SEC)
+#define MESSAGE_MARGIN (((MSG_REPEAT_NUM-1)+5) * BSP_TICKS_PER_SEC)
+
+#define DATA_STOR_SIZE    (SAVED_DATA_SCOPE*60*60/BSP_MSG_INTERVAL)
+
+#define NAN (INT16_MIN)
+
+/* local objects -----------------------------------------------------------*/
+
+$declare(AOs::Data)
+
+static Data l_data; /* the sole instance of this active object */
+
+
+/* Public-scope objects ----------------------------------------------------*/
+
+$define(AOs::AO_Data)
+
+/* Active object definition ================================================*/
+
+$define(AOs::Data_ctor)
+$define(AOs::Data)</text>
   </file>
  </directory>
 </model>

@@ -43,6 +43,7 @@ enum ProjectSignals {
 
     DISP_BLINK_SIG,    //migotanie wyświetlacza
     ORTHO_BLINK_SIG,  //ticker dla komponentu ortogonalnego wyświetlacza
+    DELAY_TIMEOUT_SIG,    //AO_Data drop outs detection
     TIMEOUT_SIG,
 
     MAX_SIG                     /* the last signal */
