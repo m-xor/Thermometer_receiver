@@ -87,12 +87,15 @@ void SysTick_Handler(void) {   /* system clock tick ISR */
     buttons.previous   = current; /* update the history */
     tmp ^= buttons.depressed;     /* changed debounced depressed */
     if ((tmp & (1<<BUTTON_PIN)) != 0U) {  /* debounced B1 state changed? */
-        if ((buttons.depressed & (1<<BUTTON_PIN)) != 0U) { /* is B1 depressed? */
-            QF_PUBLISH(Q_NEW(QEvt, BTN_PRSS_SIG), &l_bsp_obj);
-        }
-        else {            /* the button is released */
-            QF_PUBLISH(Q_NEW(QEvt, BTN_REL_SIG), &l_bsp_obj);
-        }
+//        if ((buttons.depressed & (1<<BUTTON_PIN)) != 0U) { /* is B1 depressed? */
+//            QF_PUBLISH(Q_NEW(QEvt, BTN_PRSS_SIG), &l_bsp_obj);
+//        }
+//        else {            /* the button is released */
+//            QF_PUBLISH(Q_NEW(QEvt, BTN_REL_SIG), &l_bsp_obj);
+//        }
+
+      QF_PUBLISH(Q_NEW(QEvt, BTN_EVT_SIG), &l_bsp_obj);
+
     }
 
     static uint8_t timestamp_div = BSP_TICKS_PER_SEC/BSP_TIMESTAMP_TICKS_PER_SEC;

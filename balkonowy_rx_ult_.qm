@@ -824,13 +824,47 @@ me-&gt;storage[me-&gt;current_index++] =  value;
 if(me-&gt;current_index &gt;= DATA_STOR_SIZE)
     me-&gt;current_index = 0;</code>
    </operation>
+   <operation name="getData" type="void" visibility="0x02" properties="0x00">
+    <parameter name="min" type="int16_t *"/>
+    <parameter name="max" type="int16_t *"/>
+    <code>int16_t tmp_min = INT16_MAX, tmp_max = INT16_MIN;
+
+for(uint16_t i=0; i&lt;DATA_STOR_SIZE; i++)
+{
+    if( me-&gt;storage[i] &lt;tmp_min &amp;&amp; me-&gt;storage[i] !=DROP_MARK )
+        tmp_min = me-&gt;storage[i];
+    if( me-&gt;storage[i] &gt; tmp_max &amp;&amp; me-&gt;storage[i] !=DROP_MARK )
+        tmp_max = me-&gt;storage[i];
+}
+
+*min = tmp_min==INT16_MAX ? NAN_MINMAX : tmp_min;
+*max = tmp_max==INT16_MIN ? NAN_MINMAX : tmp_max;</code>
+   </operation>
+   <operation name="pubData" type="void" visibility="0x02" properties="0x00">
+    <parameter name="min" type="int16_t"/>
+    <parameter name="max" type="int16_t"/>
+    <code>ValEvt *pe = Q_NEW(ValEvt, MIN_TEMP_SIG);
+pe-&gt;denom = me-&gt;denominator;
+pe-&gt;value = min;
+QF_PUBLISH((QEvt*)pe, me);
+pe = Q_NEW(ValEvt, MAX_TEMP_SIG);
+pe-&gt;denom = me-&gt;denominator;
+pe-&gt;value = max;
+QF_PUBLISH((QEvt*)pe, me);
+
+QS_BEGIN(MINIMAX_STAT,me)
+    QS_I16(0, min); 
+    QS_I16(0, max); 
+    QS_I16(0, me-&gt;denominator); 
+QS_END()   </code>
+   </operation>
    <statechart properties="QS_FUN_DICT">
     <initial target="../2">
      <action>(void)e;
 
 for(int16_t i=0; i&lt;DATA_STOR_SIZE; i++)
 {
-    me-&gt;storage[i] = NAN;
+    me-&gt;storage[i] = DROP_MARK;
 }
 me-&gt;current_index = 0;
 me-&gt;denominator = 0;
@@ -846,7 +880,9 @@ QS_OBJ_DICTIONARY(&amp;l_data);</action>
     </initial>
     <state name="delay">
      <entry brief="arm delay once">QTimeEvt_armX(&amp;me-&gt;delay,  MESSAGE_MARGIN, 0);</entry>
-     <exit brief="compute&amp;publish minmax"/>
+     <exit brief="compute&amp;publish minmax">int16_t min, max;
+Data_getData(me, &amp;min, &amp;max);
+Data_pubData(me, min, max);</exit>
      <tran trig="OTEMP" target="../../2">
       <action brief="save temp, rearm timer">QTimeEvt_rearm(&amp;me-&gt;timer,  MESSAGE_PERIOD);
 Data_saveData(me,Q_EVT_CAST(ValEvt)-&gt;value, Q_EVT_CAST(ValEvt)-&gt;denom);</action>
@@ -855,7 +891,7 @@ Data_saveData(me,Q_EVT_CAST(ValEvt)-&gt;value, Q_EVT_CAST(ValEvt)-&gt;denom);</a
       </tran_glyph>
      </tran>
      <tran trig="DELAY_TIMEOUT" target="../../2">
-      <action brief="save drop">Data_saveData(me,NAN, me-&gt;denominator);</action>
+      <action brief="save drop">Data_saveData(me,DROP_MARK, me-&gt;denominator);</action>
       <tran_glyph conn="37,40,3,1,-12">
        <action box="0,-2,17,4"/>
       </tran_glyph>
@@ -869,7 +905,11 @@ Data_saveData(me,Q_EVT_CAST(ValEvt)-&gt;value, Q_EVT_CAST(ValEvt)-&gt;denom);</a
      <tran trig="OTEMP">
       <action brief="save temp, compute&amp;publish minmax, rearm timer">QTimeEvt_rearm(&amp;me-&gt;timer,  MESSAGE_PERIOD);
 
-Data_saveData(me,Q_EVT_CAST(ValEvt)-&gt;value, Q_EVT_CAST(ValEvt)-&gt;denom);</action>
+Data_saveData(me,Q_EVT_CAST(ValEvt)-&gt;value, Q_EVT_CAST(ValEvt)-&gt;denom);
+
+int16_t min, max;
+Data_getData(me, &amp;min, &amp;max);
+Data_pubData(me, min, max);</action>
       <tran_glyph conn="9,28,3,-1,13">
        <action box="0,-2,16,7"/>
       </tran_glyph>
@@ -884,6 +924,56 @@ Data_saveData(me,Q_EVT_CAST(ValEvt)-&gt;value, Q_EVT_CAST(ValEvt)-&gt;denom);</a
     <state_diagram size="80,50"/>
    </statechart>
   </class>
+  <class name="Button" superclass="qpc::QActive">
+   <attribute name="timer" type="QTimeEvt" visibility="0x02" properties="0x00"/>
+   <statechart properties="QS_FUN_DICT">
+    <initial target="../1">
+     <action>QActive_subscribe(&amp;me-&gt;super, BTN_EVT_SIG);
+
+QS_OBJ_DICTIONARY(AO_Button);
+
+(void)e;</action>
+     <initial_glyph conn="10,4,5,0,6,3">
+      <action box="0,-2,10,2"/>
+     </initial_glyph>
+    </initial>
+    <state name="idle">
+     <tran trig="BTN_EVT" target="../../2">
+      <action brief="arm">QTimeEvt_rearm(&amp;me-&gt;timer,  LONG_PRESS_TICKS);
+//QTimeEvt_armX(&amp;me-&gt;timer,  LONG_PRESS_TICKS, 0);</action>
+      <tran_glyph conn="22,15,1,1,18,10,-18">
+       <action box="0,-2,14,2"/>
+      </tran_glyph>
+     </tran>
+     <state_glyph node="10,7,12,11"/>
+    </state>
+    <state name="pressed">
+     <tran trig="TIMEOUT" target="../../3">
+      <action brief="pub LONG">QF_PUBLISH(Q_NEW(QEvt, BTN_PRSS_SIG), me);</action>
+      <tran_glyph conn="22,31,1,1,20,9,-20">
+       <action box="0,-2,20,2"/>
+      </tran_glyph>
+     </tran>
+     <tran trig="BTN_EVT" target="../../1">
+      <action brief="pub SHORT">QF_PUBLISH(Q_NEW(QEvt, BTN_SHORT_SIG), me);</action>
+      <tran_glyph conn="22,28,1,1,20,-16,-20">
+       <action box="0,-2,20,2"/>
+      </tran_glyph>
+     </tran>
+     <state_glyph node="10,22,12,11"/>
+    </state>
+    <state name="longPressed">
+     <tran trig="BTN_EVT" target="../../1">
+      <action brief="pub REL">QF_PUBLISH(Q_NEW(QEvt, BTN_REL_SIG), me);</action>
+      <tran_glyph conn="22,43,1,1,23,-33,-23">
+       <action box="0,-2,20,2"/>
+      </tran_glyph>
+     </tran>
+     <state_glyph node="10,36,12,10"/>
+    </state>
+    <state_diagram size="80,54"/>
+   </statechart>
+  </class>
   <attribute name="AO_SerDisp" type="QActive * const" visibility="0x00" properties="0x00">
    <code>= &amp;l_serDisp.super;</code>
   </attribute>
@@ -896,6 +986,9 @@ Data_saveData(me,Q_EVT_CAST(ValEvt)-&gt;value, Q_EVT_CAST(ValEvt)-&gt;denom);</a
   </attribute>
   <attribute name="AO_Data" type="QActive * const" visibility="0x00" properties="0x00">
    <code>= &amp;l_data.super;</code>
+  </attribute>
+  <attribute name="AO_Button" type="QMActive * const" visibility="0x00" properties="0x00">
+   <code>= &amp;l_button.super;</code>
   </attribute>
   <operation name="Rcv_ctor" type="void" visibility="0x00" properties="0x00">
    <code>Rcv * const me = &amp;l_rcv;
@@ -968,6 +1061,14 @@ QActive_ctor(&amp;me-&gt;super, Q_STATE_CAST(&amp;Data_initial));
 QTimeEvt_ctorX(&amp;me-&gt;timer, &amp;me-&gt;super, TIMEOUT_SIG, SOFT_TICKRATE_0);
 QTimeEvt_ctorX(&amp;me-&gt;delay, &amp;me-&gt;super, DELAY_TIMEOUT_SIG, HARD_TICKRATE_1);</code>
   </operation>
+  <operation name="Button_ctor" type="void" visibility="0x00" properties="0x00">
+   <code>Button * const me = &amp;l_button;
+
+QActive_ctor(&amp;me-&gt;super, Q_STATE_CAST(&amp;Button_initial));
+
+//inicjacja timera
+QTimeEvt_ctorX(&amp;me-&gt;timer, &amp;me-&gt;super, TIMEOUT_SIG, HARD_TICKRATE_1);</code>
+  </operation>
  </package>
  <directory name="qm_src">
   <file name="project.h" codec="UTF-8">
@@ -980,8 +1081,11 @@ enum ProjectSignals {
     //QEvt
     VW_SIG  = Q_USER_SIG,    //niskopoziomowy sterownik odebrał message (dobry lub zły to się okaże)
     TX_HALT_SIG,    //nadajnik zraportował nieudany start 
-    BTN_PRSS_SIG,    //przycisk został wciśnięty
+    BTN_EVT_SIG,    //wykryto zmianę stanu przycisku
+    BTN_PRSS_SIG,    //przycisk został wciśnięty (generowany przy długim wciśnięciu)
     BTN_REL_SIG,    //przycisk został zwolniony
+    BTN_SHORT_SIG,    //krótkie przyciśnięcie (generowane przy zwalnaniu)
+
 
     //ErrEvt
     TX_ERR_SIG,    //błędy raportowane przez nadajnik
@@ -990,6 +1094,8 @@ enum ProjectSignals {
     //ValEvt
     OTEMP_SIG,  /* odczyt temp czujnika zewn.*/
     BATT_SIG,    //odczyt napięcia baterii
+    MIN_TEMP_SIG,    //minimalna temperatura w  zadanym przedziale czasu
+    MAX_TEMP_SIG, //max temp. w zadanym przedziale
 
     //MsgEvt
     MSG_SIG,    //treść odebranego komunikatu
@@ -1278,8 +1384,10 @@ $define(AOs::Control)</text>
    <text>#ifndef data_h
 #define data_h
 
-/* symbols definitions */
+#include &quot;led7seg.h&quot;
 
+/* symbols definitions */
+#define NAN_MINMAX  (ALL_MINUS)
 /* active objects' &quot;constructors&quot; */
 
 $declare(AOs::Data_ctor)
@@ -1294,7 +1402,7 @@ $declare(AOs::AO_Data)
   </file>
   <file name="data.c" codec="UTF-8">
    <text>#include &quot;qpc.h&quot;
-//#include &quot;bsp.h&quot;
+#include &quot;bsp.h&quot;
 #include &quot;app_conf.h&quot;
 #include &quot;protocol.h&quot;
 #include &quot;project.h&quot;
@@ -1307,9 +1415,9 @@ Q_DEFINE_THIS_FILE
 #define MESSAGE_PERIOD (BSP_MSG_INTERVAL * BSP_SOFT_TIMER_TICKS_PER_SEC)
 #define MESSAGE_MARGIN (((MSG_REPEAT_NUM-1)+5) * BSP_TICKS_PER_SEC)
 
-#define DATA_STOR_SIZE    (SAVED_DATA_SCOPE*60*60/BSP_MSG_INTERVAL)
+#define DATA_STOR_SIZE    ((uint16_t)(SAVED_DATA_SCOPE*60*60/BSP_MSG_INTERVAL))
 
-#define NAN (INT16_MIN)
+#define DROP_MARK (INT16_MIN+1)
 
 /* local objects -----------------------------------------------------------*/
 
@@ -1326,6 +1434,55 @@ $define(AOs::AO_Data)
 
 $define(AOs::Data_ctor)
 $define(AOs::Data)</text>
+  </file>
+  <file name="button.h" codec="UTF-8">
+   <text>#ifndef button_h
+#define button_h
+
+
+/* symbols definitions */
+
+/* active objects' &quot;constructors&quot; */
+
+$declare(AOs::Button_ctor)
+
+/* instantiation of the orthogonal components */
+
+
+/* opaque pointer to AOs */
+$declare(AOs::AO_Button)
+
+#endif /* button_h */</text>
+  </file>
+  <file name="button.c" codec="UTF-8">
+   <text>#include &quot;qpc.h&quot;
+#include &quot;bsp.h&quot;
+#include &quot;app_conf.h&quot;
+#include &quot;protocol.h&quot;
+#include &quot;project.h&quot;
+#include &quot;button.h&quot;
+
+Q_DEFINE_THIS_FILE
+
+//definicje symboli (poddefinicje są zdefinowane w app_conf.h)
+
+#define LONG_PRESS_TICKS (LONG_PRESS_STRETCH * BSP_TICKS_PER_SEC/1000)
+
+/* local objects -----------------------------------------------------------*/
+
+$declare(AOs::Button)
+
+static Button l_button; /* the sole instance of this active object */
+
+
+/* Public-scope objects ----------------------------------------------------*/
+
+$define(AOs::AO_Button)
+
+/* Active object definition ================================================*/
+
+$define(AOs::Button_ctor)
+$define(AOs::Button)</text>
   </file>
  </directory>
 </model>

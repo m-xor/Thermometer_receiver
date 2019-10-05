@@ -17,7 +17,7 @@
 */
 /*$endhead${qm_src::data.c} ################################################*/
 #include "qpc.h"
-//#include "bsp.h"
+#include "bsp.h"
 #include "app_conf.h"
 #include "protocol.h"
 #include "project.h"
@@ -30,9 +30,9 @@ Q_DEFINE_THIS_FILE
 #define MESSAGE_PERIOD (BSP_MSG_INTERVAL * BSP_SOFT_TIMER_TICKS_PER_SEC)
 #define MESSAGE_MARGIN (((MSG_REPEAT_NUM-1)+5) * BSP_TICKS_PER_SEC)
 
-#define DATA_STOR_SIZE    (SAVED_DATA_SCOPE*60*60/BSP_MSG_INTERVAL)
+#define DATA_STOR_SIZE    ((uint16_t)(SAVED_DATA_SCOPE*60*60/BSP_MSG_INTERVAL))
 
-#define NAN (INT16_MIN)
+#define DROP_MARK (INT16_MIN+1)
 
 /* local objects -----------------------------------------------------------*/
 
@@ -52,6 +52,8 @@ typedef struct {
 
 /* private: */
 static void Data_saveData(Data * const me, int16_t value, uint8_t denominator);
+static void Data_getData(Data * const me, int16_t * min, int16_t * max);
+static void Data_pubData(Data * const me, int16_t min, int16_t max);
 
 /* protected: */
 static QState Data_initial(Data * const me, QEvt const * const e);
@@ -98,6 +100,40 @@ static void Data_saveData(Data * const me, int16_t value, uint8_t denominator) {
         me->current_index = 0;
 }
 
+/*${AOs::Data::getData} ....................................................*/
+static void Data_getData(Data * const me, int16_t * min, int16_t * max) {
+    int16_t tmp_min = INT16_MAX, tmp_max = INT16_MIN;
+
+    for(uint16_t i=0; i<DATA_STOR_SIZE; i++)
+    {
+        if( me->storage[i] <tmp_min && me->storage[i] !=DROP_MARK )
+            tmp_min = me->storage[i];
+        if( me->storage[i] > tmp_max && me->storage[i] !=DROP_MARK )
+            tmp_max = me->storage[i];
+    }
+
+    *min = tmp_min==INT16_MAX ? NAN_MINMAX : tmp_min;
+    *max = tmp_max==INT16_MIN ? NAN_MINMAX : tmp_max;
+}
+
+/*${AOs::Data::pubData} ....................................................*/
+static void Data_pubData(Data * const me, int16_t min, int16_t max) {
+    ValEvt *pe = Q_NEW(ValEvt, MIN_TEMP_SIG);
+    pe->denom = me->denominator;
+    pe->value = min;
+    QF_PUBLISH((QEvt*)pe, me);
+    pe = Q_NEW(ValEvt, MAX_TEMP_SIG);
+    pe->denom = me->denominator;
+    pe->value = max;
+    QF_PUBLISH((QEvt*)pe, me);
+
+    QS_BEGIN(MINIMAX_STAT,me)
+        QS_I16(0, min);
+        QS_I16(0, max);
+        QS_I16(0, me->denominator);
+    QS_END()
+}
+
 /*${AOs::Data::SM} .........................................................*/
 static QState Data_initial(Data * const me, QEvt const * const e) {
     /*${AOs::Data::SM::initial} */
@@ -105,7 +141,7 @@ static QState Data_initial(Data * const me, QEvt const * const e) {
 
     for(int16_t i=0; i<DATA_STOR_SIZE; i++)
     {
-        me->storage[i] = NAN;
+        me->storage[i] = DROP_MARK;
     }
     me->current_index = 0;
     me->denominator = 0;
@@ -131,6 +167,14 @@ static QState Data_delay(Data * const me, QEvt const * const e) {
             status_ = Q_HANDLED();
             break;
         }
+        /*${AOs::Data::SM::delay} */
+        case Q_EXIT_SIG: {
+            int16_t min, max;
+            Data_getData(me, &min, &max);
+            Data_pubData(me, min, max);
+            status_ = Q_HANDLED();
+            break;
+        }
         /*${AOs::Data::SM::delay::OTEMP} */
         case OTEMP_SIG: {
             QTimeEvt_rearm(&me->timer,  MESSAGE_PERIOD);
@@ -140,7 +184,7 @@ static QState Data_delay(Data * const me, QEvt const * const e) {
         }
         /*${AOs::Data::SM::delay::DELAY_TIMEOUT} */
         case DELAY_TIMEOUT_SIG: {
-            Data_saveData(me,NAN, me->denominator);
+            Data_saveData(me,DROP_MARK, me->denominator);
             status_ = Q_TRAN(&Data_wait);
             break;
         }
@@ -160,6 +204,10 @@ static QState Data_wait(Data * const me, QEvt const * const e) {
             QTimeEvt_rearm(&me->timer,  MESSAGE_PERIOD);
 
             Data_saveData(me,Q_EVT_CAST(ValEvt)->value, Q_EVT_CAST(ValEvt)->denom);
+
+            int16_t min, max;
+            Data_getData(me, &min, &max);
+            Data_pubData(me, min, max);
             status_ = Q_HANDLED();
             break;
         }

@@ -79,4 +79,16 @@
  */
 #define BSP_WD_TIMEOUT 1500
 
+/*
+ * Range of time since when data is saved.
+ * in hours
+ */
+//#define SAVED_DATA_SCOPE 24
+#define SAVED_DATA_SCOPE 1
+
+/*
+ * Time button is to be pressed for "long press" event
+ */
+#define LONG_PRESS_STRETCH 500
+
 #endif /* APP_CONF_H_ */
