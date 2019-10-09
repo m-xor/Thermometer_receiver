@@ -46,8 +46,11 @@ enum ProjectSignals {
 
     MAX_PUB_SIG,          /* the last published signal */
 
+    UPDATE_MINMAX_SIG,    //zlecenie przeszukania zapisanych danych i publikacji min i max
+    RET_ORTHO_SIG,    //rządanie powrotu z komponentu ortogonalnego
     DISP_BLINK_SIG,    //migotanie wyświetlacza
     ORTHO_BLINK_SIG,  //ticker dla komponentu ortogonalnego wyświetlacza
+    MINMAX_TIMEOUT_SIG,    //sygnał timeoutu dla komponentu orto pt. minimax
     DELAY_TIMEOUT_SIG,    //AO_Data drop outs detection
     TIMEOUT_SIG,
 

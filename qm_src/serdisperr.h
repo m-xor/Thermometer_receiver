@@ -25,7 +25,7 @@
 
 /*$declare${AOs::SerDispErr_ctor} ##########################################*/
 /*${AOs::SerDispErr_ctor} ..................................................*/
-QHsm * SerDispErr_ctor(QTimeEvt * const blinkEvt);
+QHsm * SerDispErr_ctor(QActive * const superAO);
 /*$enddecl${AOs::SerDispErr_ctor} ##########################################*/
 
 /* instantiation of the orthogonal components */

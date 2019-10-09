@@ -44,6 +44,9 @@
 //wartości specjalne funkcji led_display_number
 #define ALL_MINUS INT16_MAX
 #define ALL_QUESTION (INT16_MAX-1)
+#define ONE_MINUS (INT16_MAX-2)
+#define ONE_QUESTION (INT16_MAX-3)
+#define SPEC_SIGNS_GUARD (INT16_MAX-4)	//zawsze na końcu
 
 //0 - stani niski włącza segment, 1 - stan wysoki włącza segment (sct2024 włącza wysokim)
 #define LED_ACTIVE 1
@@ -57,6 +60,11 @@
 //numery predefiniowanych komunikatów
 enum {
 	HALT_MSG,
+	FLOOR_MSG,
+	CEIL_MSG,
+	FLAT_TREND_MSG,
+//	UPWARD_TREND_MSG,
+//	DOWNWARD_TREND_MSG,
 	MAX_MSG	//zawsze ostatni
 };
 //************************************************************************************

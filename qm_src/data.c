@@ -21,18 +21,14 @@
 #include "app_conf.h"
 #include "protocol.h"
 #include "project.h"
+#include "datahist.h"
 #include "data.h"
 
 Q_DEFINE_THIS_FILE
 
-//definicje symboli (poddefinicje są zdefinowane w app_conf.h)
-
 #define MESSAGE_PERIOD (BSP_MSG_INTERVAL * BSP_SOFT_TIMER_TICKS_PER_SEC)
 #define MESSAGE_MARGIN (((MSG_REPEAT_NUM-1)+5) * BSP_TICKS_PER_SEC)
 
-#define DATA_STOR_SIZE    ((uint16_t)(SAVED_DATA_SCOPE*60*60/BSP_MSG_INTERVAL))
-
-#define DROP_MARK (INT16_MIN+1)
 
 /* local objects -----------------------------------------------------------*/
 
@@ -45,18 +41,15 @@ typedef struct {
 /* private: */
     QTimeEvt timer;
     QTimeEvt delay;
-    int16_t storage[DATA_STOR_SIZE];
-    uint16_t current_index;
     uint8_t denominator;
 } Data;
 
 /* private: */
-static void Data_saveData(Data * const me, int16_t value, uint8_t denominator);
-static void Data_getData(Data * const me, int16_t * min, int16_t * max);
 static void Data_pubData(Data * const me, int16_t min, int16_t max);
 
 /* protected: */
 static QState Data_initial(Data * const me, QEvt const * const e);
+static QState Data_cont(Data * const me, QEvt const * const e);
 static QState Data_delay(Data * const me, QEvt const * const e);
 static QState Data_wait(Data * const me, QEvt const * const e);
 /*$enddecl${AOs::Data} #####################################################*/
@@ -92,30 +85,6 @@ void Data_ctor(void) {
 /*$enddef${AOs::Data_ctor} #################################################*/
 /*$define${AOs::Data} ######################################################*/
 /*${AOs::Data} .............................................................*/
-/*${AOs::Data::saveData} ...................................................*/
-static void Data_saveData(Data * const me, int16_t value, uint8_t denominator) {
-    me->denominator = denominator;
-    me->storage[me->current_index++] =  value;
-    if(me->current_index >= DATA_STOR_SIZE)
-        me->current_index = 0;
-}
-
-/*${AOs::Data::getData} ....................................................*/
-static void Data_getData(Data * const me, int16_t * min, int16_t * max) {
-    int16_t tmp_min = INT16_MAX, tmp_max = INT16_MIN;
-
-    for(uint16_t i=0; i<DATA_STOR_SIZE; i++)
-    {
-        if( me->storage[i] <tmp_min && me->storage[i] !=DROP_MARK )
-            tmp_min = me->storage[i];
-        if( me->storage[i] > tmp_max && me->storage[i] !=DROP_MARK )
-            tmp_max = me->storage[i];
-    }
-
-    *min = tmp_min==INT16_MAX ? NAN_MINMAX : tmp_min;
-    *max = tmp_max==INT16_MIN ? NAN_MINMAX : tmp_max;
-}
-
 /*${AOs::Data::pubData} ....................................................*/
 static void Data_pubData(Data * const me, int16_t min, int16_t max) {
     ValEvt *pe = Q_NEW(ValEvt, MIN_TEMP_SIG);
@@ -139,12 +108,14 @@ static QState Data_initial(Data * const me, QEvt const * const e) {
     /*${AOs::Data::SM::initial} */
     (void)e;
 
-    for(int16_t i=0; i<DATA_STOR_SIZE; i++)
-    {
-        me->storage[i] = DROP_MARK;
-    }
-    me->current_index = 0;
-    me->denominator = 0;
+    //for(int16_t i=0; i<DATA_STOR_SIZE; i++)
+    //{
+    //    me->storage[i] = DROP_MARK;
+    //}
+    //me->current_index = 0;
+    //me->denominator = 0;
+
+    data_init();
 
     QActive_subscribe(&me->super, OTEMP_SIG);
 
@@ -152,40 +123,24 @@ static QState Data_initial(Data * const me, QEvt const * const e) {
 
     QS_OBJ_DICTIONARY(&l_data);
 
+    QS_FUN_DICTIONARY(&Data_cont);
     QS_FUN_DICTIONARY(&Data_delay);
     QS_FUN_DICTIONARY(&Data_wait);
 
     return Q_TRAN(&Data_wait);
 }
-/*${AOs::Data::SM::delay} ..................................................*/
-static QState Data_delay(Data * const me, QEvt const * const e) {
+/*${AOs::Data::SM::cont} ...................................................*/
+static QState Data_cont(Data * const me, QEvt const * const e) {
     QState status_;
     switch (e->sig) {
-        /*${AOs::Data::SM::delay} */
-        case Q_ENTRY_SIG: {
-            QTimeEvt_armX(&me->delay,  MESSAGE_MARGIN, 0);
-            status_ = Q_HANDLED();
-            break;
-        }
-        /*${AOs::Data::SM::delay} */
-        case Q_EXIT_SIG: {
+        /*${AOs::Data::SM::cont::UPDATE_MINMAX} */
+        case UPDATE_MINMAX_SIG: {
             int16_t min, max;
-            Data_getData(me, &min, &max);
-            Data_pubData(me, min, max);
+            data_get(&min, &max);
+            Data_pubData(me,
+                (min==DROP_MARK)?NAN_MINMAX:min,
+                (max==DROP_MARK)?NAN_MINMAX:max);
             status_ = Q_HANDLED();
-            break;
-        }
-        /*${AOs::Data::SM::delay::OTEMP} */
-        case OTEMP_SIG: {
-            QTimeEvt_rearm(&me->timer,  MESSAGE_PERIOD);
-            Data_saveData(me,Q_EVT_CAST(ValEvt)->value, Q_EVT_CAST(ValEvt)->denom);
-            status_ = Q_TRAN(&Data_wait);
-            break;
-        }
-        /*${AOs::Data::SM::delay::DELAY_TIMEOUT} */
-        case DELAY_TIMEOUT_SIG: {
-            Data_saveData(me,DROP_MARK, me->denominator);
-            status_ = Q_TRAN(&Data_wait);
             break;
         }
         default: {
@@ -195,29 +150,71 @@ static QState Data_delay(Data * const me, QEvt const * const e) {
     }
     return status_;
 }
-/*${AOs::Data::SM::wait} ...................................................*/
-static QState Data_wait(Data * const me, QEvt const * const e) {
+/*${AOs::Data::SM::cont::delay} ............................................*/
+static QState Data_delay(Data * const me, QEvt const * const e) {
     QState status_;
     switch (e->sig) {
-        /*${AOs::Data::SM::wait::OTEMP} */
-        case OTEMP_SIG: {
-            QTimeEvt_rearm(&me->timer,  MESSAGE_PERIOD);
-
-            Data_saveData(me,Q_EVT_CAST(ValEvt)->value, Q_EVT_CAST(ValEvt)->denom);
-
-            int16_t min, max;
-            Data_getData(me, &min, &max);
-            Data_pubData(me, min, max);
+        /*${AOs::Data::SM::cont::delay} */
+        case Q_ENTRY_SIG: {
+            QTimeEvt_armX(&me->delay,  MESSAGE_MARGIN, 0);
             status_ = Q_HANDLED();
             break;
         }
-        /*${AOs::Data::SM::wait::TIMEOUT} */
+        /*${AOs::Data::SM::cont::delay} */
+        case Q_EXIT_SIG: {
+            QACTIVE_POST(&me->super,Q_NEW(QEvt, UPDATE_MINMAX_SIG), me);
+            status_ = Q_HANDLED();
+            break;
+        }
+        /*${AOs::Data::SM::cont::delay::OTEMP} */
+        case OTEMP_SIG: {
+            QTimeEvt_rearm(&me->timer,  MESSAGE_PERIOD);
+            //Data_saveData(me,Q_EVT_CAST(ValEvt)->value, Q_EVT_CAST(ValEvt)->denom);
+            data_save(Q_EVT_CAST(ValEvt)->value);
+            me->denominator = Q_EVT_CAST(ValEvt)->denom;
+            status_ = Q_TRAN(&Data_wait);
+            break;
+        }
+        /*${AOs::Data::SM::cont::delay::DELAY_TIMEOUT} */
+        case DELAY_TIMEOUT_SIG: {
+            //Data_saveData(me,DROP_MARK, me->denominator);
+            data_save(DROP_MARK);
+            status_ = Q_TRAN(&Data_wait);
+            break;
+        }
+        default: {
+            status_ = Q_SUPER(&Data_cont);
+            break;
+        }
+    }
+    return status_;
+}
+/*${AOs::Data::SM::cont::wait} .............................................*/
+static QState Data_wait(Data * const me, QEvt const * const e) {
+    QState status_;
+    switch (e->sig) {
+        /*${AOs::Data::SM::cont::wait::OTEMP} */
+        case OTEMP_SIG: {
+            QTimeEvt_rearm(&me->timer,  MESSAGE_PERIOD);
+
+            //Data_saveData(me,Q_EVT_CAST(ValEvt)->value, Q_EVT_CAST(ValEvt)->denom);
+            data_save(Q_EVT_CAST(ValEvt)->value);
+            me->denominator = Q_EVT_CAST(ValEvt)->denom;
+
+            //QEvt *pe = Q_NEW(QEvt, UPDATE_MINMAX_SIG);
+            //QACTIVE_POST(AO_Data,pe, me);
+
+            QACTIVE_POST(&me->super,Q_NEW(QEvt, UPDATE_MINMAX_SIG), me);
+            status_ = Q_HANDLED();
+            break;
+        }
+        /*${AOs::Data::SM::cont::wait::TIMEOUT} */
         case TIMEOUT_SIG: {
             status_ = Q_TRAN(&Data_delay);
             break;
         }
         default: {
-            status_ = Q_SUPER(&QHsm_top);
+            status_ = Q_SUPER(&Data_cont);
             break;
         }
     }

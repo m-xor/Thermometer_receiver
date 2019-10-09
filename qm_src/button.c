@@ -60,7 +60,7 @@ static Button l_button; /* the sole instance of this active object */
 
 /*$define${AOs::AO_Button} #################################################*/
 /*${AOs::AO_Button} ........................................................*/
-QMActive * const AO_Button = &l_button.super;
+QActive * const AO_Button = &l_button.super;
 /*$enddef${AOs::AO_Button} #################################################*/
 
 /* Active object definition ================================================*/

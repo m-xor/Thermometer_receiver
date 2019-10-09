@@ -22,7 +22,9 @@
 #include "led7seg.h"
 
 /* symbols definitions */
+
 #define NAN_MINMAX  (ALL_MINUS)
+
 /* active objects' "constructors" */
 
 /*$declare${AOs::Data_ctor} ################################################*/

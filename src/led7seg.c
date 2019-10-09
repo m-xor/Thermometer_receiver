@@ -110,13 +110,24 @@ void led_display_number(int16_t number, uint8_t base)
 	//zachowujemy stan errora
 	error = buf.array[ERROR_SEG] & _BV(SPEC_SEG);
 
-	if(number==ALL_MINUS)
+	if(number > SPEC_SIGNS_GUARD)
 	{
-			fill_buffer( led_pattern[ MINUS_SIGN ] );
-	}
-	else if(number==ALL_QUESTION)
-	{
+		if(number==ONE_MINUS)
+		{
+			buf.array[0] = led_pattern[ MINUS_SIGN ];
+		}
+		else if(number==ONE_QUESTION)
+		{
+			buf.array[0] = led_pattern[ QUESTION_SIGN ];
+		}
+		else if(number==ALL_QUESTION)
+		{
 			fill_buffer( led_pattern[ QUESTION_SIGN ] );
+		}
+		else
+		{
+			fill_buffer( led_pattern[ QUESTION_SIGN ] );
+		}
 	}
 	else
 	{
@@ -180,10 +191,24 @@ void led_notify_error(bool error)
 void led_msg(uint8_t msgno)
 {
 	static uint8_t const msg[][NUM_DIGITS] = {
-			{ /* HA */
-				((uint8_t)((PATTERN_MOD(_BV(B_SEG) | _BV(C_SEG) | _BV(E_SEG) | _BV(F_SEG) | _BV(G_SEG) )) & SEG_MASK)), //H
-				((uint8_t)((PATTERN_MOD(_BV(A_SEG) | _BV(B_SEG) | _BV(C_SEG) | _BV(E_SEG) | _BV(F_SEG) | _BV(G_SEG) )) & SEG_MASK))	//A
-			}
+
+				{	/* HA */
+					((uint8_t)((PATTERN_MOD(_BV(B_SEG) | _BV(C_SEG) | _BV(E_SEG) | _BV(F_SEG) | _BV(G_SEG) )) & SEG_MASK)), //H
+					((uint8_t)((PATTERN_MOD(_BV(A_SEG) | _BV(B_SEG) | _BV(C_SEG) | _BV(E_SEG) | _BV(F_SEG) | _BV(G_SEG) )) & SEG_MASK))	//A
+				},
+				{	/* __ */
+					((uint8_t)((PATTERN_MOD(_BV(D_SEG))) & SEG_MASK)),
+					((uint8_t)((PATTERN_MOD(_BV(D_SEG))) & SEG_MASK))
+				},
+				{	/* ^^ */
+					((uint8_t)((PATTERN_MOD(_BV(A_SEG))) & SEG_MASK)),
+					((uint8_t)((PATTERN_MOD(_BV(A_SEG))) & SEG_MASK))
+				},
+				{	/* -- */
+					((uint8_t)((PATTERN_MOD(_BV(G_SEG))) & SEG_MASK)),
+					((uint8_t)((PATTERN_MOD(_BV(G_SEG))) & SEG_MASK))
+				}
+
 
 	};
 

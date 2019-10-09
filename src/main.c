@@ -131,6 +131,10 @@ int main(int argc, char *argv[]) {
 
     QS_SIG_DICTIONARY(MIN_TEMP_SIG,  (void *)0);
     QS_SIG_DICTIONARY(MAX_TEMP_SIG,  (void *)0);
+    QS_SIG_DICTIONARY(UPDATE_MINMAX_SIG,  (void *)0);
+
+    QS_SIG_DICTIONARY(RET_ORTHO_SIG,  (void *)0);
+    QS_SIG_DICTIONARY(MINMAX_TIMEOUT_SIG,  (void *)0);
 
 
 

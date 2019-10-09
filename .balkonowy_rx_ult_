@@ -9,7 +9,13 @@
   <item name="backups">0</item>
  </group>
  <group name="windows">
-  <item id="AOs::Data::SM">0,0,493,448,*</item>
+  <item id="AOs::SerDisp::SM">0,0,354,534,*</item>
+  <item id="AOs::SerDispMinMax::SM">0,24,394,534</item>
+  <item id="qm_src::serdispminmax.c">0,258,284,300</item>
+  <item id="qm_src::serdisp.h">70,0,284,300</item>
+  <item id="qm_src::serdisp.c">70,234,284,300</item>
+  <item id="qm_src::serdisperr.h">0,0,284,300</item>
+  <item id="qm_src::serdisperr.c">0,234,284,300</item>
  </group>
  <group name="search">
   <item name="options">2032128</item>
