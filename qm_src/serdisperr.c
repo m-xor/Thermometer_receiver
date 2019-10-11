@@ -48,7 +48,7 @@ typedef struct {
     uint8_t txHalt;
     uint8_t txErr;
     uint8_t err;
-    QTimeEvt * blinkEvtPtr;
+    QTimeEvt blinkEvt;
 } SerDispErr;
 
 /* protected: */
@@ -77,13 +77,18 @@ static SerDispErr l_serDispErr; /* the sole instance of the SerDisp active objec
 
 /*$define${AOs::SerDispErr_ctor} ###########################################*/
 /*${AOs::SerDispErr_ctor} ..................................................*/
-QHsm * SerDispErr_ctor(QTimeEvt * const blinkEvt) {
+QHsm * SerDispErr_ctor(QActive * const superAO) {
     SerDispErr *me = &l_serDispErr;
 
     /* superclass' ctor */
     QHsm_ctor(&me->super, Q_STATE_CAST(&SerDispErr_initial));
+    /* superAO will dispatch event down to me */
+    QTimeEvt_ctorX(&me->blinkEvt, superAO, ORTHO_BLINK_SIG, HARD_TICKRATE_1);
 
-    me->blinkEvtPtr = blinkEvt;
+    me->batt = NANB;
+    me->txHalt = 0;
+    me->txErr = 0;
+    me->err = 0;
 
     return (QHsm *)me;
 }
@@ -94,12 +99,6 @@ QHsm * SerDispErr_ctor(QTimeEvt * const blinkEvt) {
 static QState SerDispErr_initial(SerDispErr * const me, QEvt const * const e) {
     /*${AOs::SerDispErr::SM::initial} */
     (void)e;
-
-    me->batt = NANB;
-    me->txHalt = 0;
-    me->txErr = 0;
-    me->err = 0;
-
 
     QS_OBJ_DICTIONARY(&l_serDispErr);
 
@@ -223,7 +222,7 @@ static QState SerDispErr_error(SerDispErr * const me, QEvt const * const e) {
     switch (e->sig) {
         /*${AOs::SerDispErr::SM::container::error} */
         case Q_EXIT_SIG: {
-            QTimeEvt_disarm(me->blinkEvtPtr);
+            QTimeEvt_disarm(&me->blinkEvt);
             status_ = Q_HANDLED();
             break;
         }
@@ -247,7 +246,7 @@ static QState SerDispErr_on(SerDispErr * const me, QEvt const * const e) {
         case Q_ENTRY_SIG: {
             led_notify_error(true);
             led_show();
-            QTimeEvt_armX(me->blinkEvtPtr,  LED_ON, 0U);
+            QTimeEvt_armX(&me->blinkEvt,  LED_ON, 0U);
             status_ = Q_HANDLED();
             break;
         }
@@ -260,7 +259,7 @@ static QState SerDispErr_on(SerDispErr * const me, QEvt const * const e) {
         }
         /*${AOs::SerDispErr::SM::container::error::on::ORTHO_BLINK} */
         case ORTHO_BLINK_SIG: {
-            QTimeEvt_armX(me->blinkEvtPtr,  LED_OFF, 0U);
+            QTimeEvt_armX(&me->blinkEvt,  LED_OFF, 0U);
             status_ = Q_TRAN(&SerDispErr_error);
             break;
         }

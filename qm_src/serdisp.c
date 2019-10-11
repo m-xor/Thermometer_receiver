@@ -24,6 +24,7 @@
 #include "link-proto.h"
 #include "led7seg.h"
 #include "serdisperr.h"
+#include "serdispminmax.h"
 #include <limits.h>
 
 Q_DEFINE_THIS_FILE
@@ -49,9 +50,9 @@ typedef struct {
 /* private: */
     QTimeEvt timeoutEvt;
     QTimeEvt blinkEvt;
-    QTimeEvt orthoBlinkEvt;
     int16_t lastRoundTemp;
     QHsm * orthoCompPtr;
+    QHsm * minmaxOrthoPtr;
 } SerDisp;
 
 /* private: */
@@ -66,6 +67,8 @@ static QState SerDisp_blink_off(SerDisp * const me, QEvt const * const e);
 static QState SerDisp_handover(SerDisp * const me, QEvt const * const e);
 static QState SerDisp_handover_blink(SerDisp * const me, QEvt const * const e);
 static QState SerDisp_run(SerDisp * const me, QEvt const * const e);
+static QState SerDisp_minimax(SerDisp * const me, QEvt const * const e);
+static QState SerDisp_minimax_blink(SerDisp * const me, QEvt const * const e);
 /*$enddecl${AOs::SerDisp} ##################################################*/
 static SerDisp l_serDisp; /* the sole instance of the SerDisp active object */
 //static QTicker l_ticker0; /* ticker active object for tick rate 0 */
@@ -92,9 +95,11 @@ void SerDisp_ctor(void) {
 
     QActive_ctor(&me->super, Q_STATE_CAST(&SerDisp_initial));
 
-    //inicjacja komponentu ortho oraz timera na jego potrzeby
-    me->orthoCompPtr = SerDispErr_ctor(&me->orthoBlinkEvt);
-    QTimeEvt_ctorX(&me->orthoBlinkEvt, &me->super, ORTHO_BLINK_SIG, HARD_TICKRATE_1);
+    //inicjacja komponentu ortho
+    me->orthoCompPtr = SerDispErr_ctor(&me->super);
+
+    //inicjacja drugiego komponentu ortogonalnego
+    me->minmaxOrthoPtr = SerDispMinMax_ctor(&me->super);
 
     //inicjacja timerów
     QTimeEvt_ctorX(&me->blinkEvt, &me->super, DISP_BLINK_SIG, HARD_TICKRATE_1);
@@ -109,6 +114,10 @@ void SerDisp_ctor(void) {
 static int16_t SerDisp_roundValue(SerDisp * const me, int16_t val, uint8_t den) {
     (void)me;
     uint16_t value, rest=0;
+
+    /* to not to lose special symbols coded out of range of variable*/
+    if(val>SPEC_SIGNS_GUARD)
+        return val;
 
     if(val == INT16_MIN)
     {
@@ -161,6 +170,7 @@ static QState SerDisp_initial(SerDisp * const me, QEvt const * const e) {
     (void)e;
 
     QHSM_INIT(me->orthoCompPtr, (QEvt *)0);
+    QHSM_INIT(me->minmaxOrthoPtr, (QEvt *)0);
 
     QActive_subscribe(&me->super, OTEMP_SIG);
     QActive_subscribe(&me->super, BATT_SIG);
@@ -170,6 +180,10 @@ static QState SerDisp_initial(SerDisp * const me, QEvt const * const e) {
 
     QActive_subscribe(&me->super, BTN_PRSS_SIG);
     QActive_subscribe(&me->super, BTN_REL_SIG);
+
+    QActive_subscribe(&me->super, MIN_TEMP_SIG);
+    QActive_subscribe(&me->super, MAX_TEMP_SIG);
+    QActive_subscribe(&me->super, BTN_SHORT_SIG);
 
 
     me->lastRoundTemp = NAN;
@@ -183,6 +197,8 @@ static QState SerDisp_initial(SerDisp * const me, QEvt const * const e) {
     QS_FUN_DICTIONARY(&SerDisp_handover);
     QS_FUN_DICTIONARY(&SerDisp_handover_blink);
     QS_FUN_DICTIONARY(&SerDisp_run);
+    QS_FUN_DICTIONARY(&SerDisp_minimax);
+    QS_FUN_DICTIONARY(&SerDisp_minimax_blink);
 
     return Q_TRAN(&SerDisp_display);
 }
@@ -222,6 +238,53 @@ static QState SerDisp_display(SerDisp * const me, QEvt const * const e) {
         /*${AOs::SerDisp::SM::display::ORTHO_BLINK} */
         case ORTHO_BLINK_SIG: {
             QHSM_DISPATCH(me->orthoCompPtr, (QEvt *)e); /* direct dispatch */
+            status_ = Q_HANDLED();
+            break;
+        }
+        /*${AOs::SerDisp::SM::display::OTEMP} */
+        case OTEMP_SIG: {
+            me->lastRoundTemp =
+                    SerDisp_roundValue(me,
+                            Q_EVT_CAST(ValEvt)->value,
+                            Q_EVT_CAST(ValEvt)->denom);
+
+
+            QTimeEvt_rearm(&me->timeoutEvt,  ASSUME_AGED);
+
+            status_ = Q_HANDLED();
+            break;
+        }
+        /*${AOs::SerDisp::SM::display::MINMAX_TIMEOUT} */
+        case MINMAX_TIMEOUT_SIG: {
+            QHSM_DISPATCH(me->minmaxOrthoPtr, (QEvt *)e); /* direct dispatch */
+            status_ = Q_HANDLED();
+            break;
+        }
+        /*${AOs::SerDisp::SM::display::MIN_TEMP} */
+        case MIN_TEMP_SIG: {
+            ValEvt pe = { {MIN_TEMP_SIG, 0, 0}, 0, 0 };
+
+            pe.value =
+                SerDisp_roundValue(me,
+                        Q_EVT_CAST(ValEvt)->value,
+                        Q_EVT_CAST(ValEvt)->denom);
+
+
+            QHSM_DISPATCH(me->minmaxOrthoPtr, (QEvt *)&pe); /* direct dispatch */
+            status_ = Q_HANDLED();
+            break;
+        }
+        /*${AOs::SerDisp::SM::display::MAX_TEMP} */
+        case MAX_TEMP_SIG: {
+            ValEvt pe = { {MAX_TEMP_SIG, 0, 0}, 0, 0 };
+
+            pe.value =
+                SerDisp_roundValue(me,
+                        Q_EVT_CAST(ValEvt)->value,
+                        Q_EVT_CAST(ValEvt)->denom);
+
+
+            QHSM_DISPATCH(me->minmaxOrthoPtr, (QEvt *)&pe); /* direct dispatch */
             status_ = Q_HANDLED();
             break;
         }
@@ -276,6 +339,12 @@ static QState SerDisp_blink(SerDisp * const me, QEvt const * const e) {
             QTimeEvt_rearm(&me->timeoutEvt,  ASSUME_AGED);
 
             status_ = Q_TRAN(&SerDisp_run);
+            break;
+        }
+        /*${AOs::SerDisp::SM::display::blink::BTN_SHORT} */
+        case BTN_SHORT_SIG: {
+            QHSM_DISPATCH(me->minmaxOrthoPtr, (QEvt *)e); /* direct dispatch */
+            status_ = Q_TRAN(&SerDisp_minimax_blink);
             break;
         }
         default: {
@@ -345,19 +414,6 @@ static QState SerDisp_handover(SerDisp * const me, QEvt const * const e) {
         case BTN_REL_SIG: {
             QHSM_DISPATCH(me->orthoCompPtr, (QEvt *)e); /* direct dispatch */
             status_ = Q_TRAN(&SerDisp_run);
-            break;
-        }
-        /*${AOs::SerDisp::SM::display::handover::OTEMP} */
-        case OTEMP_SIG: {
-
-            me->lastRoundTemp =
-                SerDisp_roundValue(me,
-                        Q_EVT_CAST(ValEvt)->value,
-                        Q_EVT_CAST(ValEvt)->denom);
-
-            QTimeEvt_rearm(&me->timeoutEvt,  ASSUME_AGED);
-
-            status_ = Q_HANDLED();
             break;
         }
         default: {
@@ -445,8 +501,71 @@ static QState SerDisp_run(SerDisp * const me, QEvt const * const e) {
             status_ = Q_HANDLED();
             break;
         }
+        /*${AOs::SerDisp::SM::display::run::BTN_SHORT} */
+        case BTN_SHORT_SIG: {
+            QHSM_DISPATCH(me->minmaxOrthoPtr, (QEvt *)e); /* direct dispatch */
+            status_ = Q_TRAN(&SerDisp_minimax);
+            break;
+        }
         default: {
             status_ = Q_SUPER(&SerDisp_display);
+            break;
+        }
+    }
+    return status_;
+}
+/*${AOs::SerDisp::SM::display::minimax} ....................................*/
+static QState SerDisp_minimax(SerDisp * const me, QEvt const * const e) {
+    QState status_;
+    switch (e->sig) {
+        /*${AOs::SerDisp::SM::display::minimax::RET_ORTHO} */
+        case RET_ORTHO_SIG: {
+            status_ = Q_TRAN(&SerDisp_run);
+            break;
+        }
+        /*${AOs::SerDisp::SM::display::minimax::TIMEOUT} */
+        case TIMEOUT_SIG: {
+            QTimeEvt_armX(&me->timeoutEvt,  ASSUME_OUTDATED-ASSUME_AGED, 0U);
+            status_ = Q_TRAN(&SerDisp_minimax_blink);
+            break;
+        }
+        default: {
+            status_ = Q_SUPER(&SerDisp_display);
+            break;
+        }
+    }
+    return status_;
+}
+/*${AOs::SerDisp::SM::display::minimax::minimax_blink} .....................*/
+static QState SerDisp_minimax_blink(SerDisp * const me, QEvt const * const e) {
+    QState status_;
+    switch (e->sig) {
+        /*${AOs::SerDisp::SM::display::minimax::minimax_blink::RET_ORTHO} */
+        case RET_ORTHO_SIG: {
+            status_ = Q_TRAN(&SerDisp_blink);
+            break;
+        }
+        /*${AOs::SerDisp::SM::display::minimax::minimax_blink::OTEMP} */
+        case OTEMP_SIG: {
+
+            me->lastRoundTemp =
+                SerDisp_roundValue(me,
+                        Q_EVT_CAST(ValEvt)->value,
+                        Q_EVT_CAST(ValEvt)->denom);
+
+            QTimeEvt_rearm(&me->timeoutEvt,  ASSUME_AGED);
+
+            status_ = Q_TRAN(&SerDisp_minimax);
+            break;
+        }
+        /*${AOs::SerDisp::SM::display::minimax::minimax_blink::TIMEOUT} */
+        case TIMEOUT_SIG: {
+            me->lastRoundTemp = NAN;
+            status_ = Q_TRAN(&SerDisp_minimax);
+            break;
+        }
+        default: {
+            status_ = Q_SUPER(&SerDisp_minimax);
             break;
         }
     }

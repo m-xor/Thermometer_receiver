@@ -40,19 +40,26 @@
 #include "serdisp.h"
 #include "timer.h"
 #include "control.h"
+#include "data.h"
+#include "button.h"
 
 
 Q_DEFINE_THIS_FILE
 
+/* todo: tune the size of queues and pools which are way too large now (see
+ *    QEQueueCtr and QMPoolCtr)
+ */
 enum {
 	dummy_PRIO,	//placeholder
 	//priorytety zadań rosnąco
-	theTicker0_PRIO,
 	AO_Control_PRIO,
+	theTicker0_PRIO,
+	AO_Data_PRIO,
 	AO_SerDisp_PRIO,
 	AO_RcvBatDec_PRIO,
 	AO_RcvTempDec_PRIO,
 	AO_RcvMsgDec_PRIO,
+	AO_Button_PRIO,
 	AO_Rcv_PRIO
 
 };
@@ -68,6 +75,8 @@ int main(int argc, char *argv[]) {
     static QEvt const *rcvBatDecQueueSto[10];
     static QEvt const *rcvTempDecQueueSto[10];
     static QEvt const *controlQueueSto[10];
+    static QEvt const *dataQueueSto[10];
+    static QEvt const *buttonQueueSto[10];
 
 
     static QSubscrList subscrSto[MAX_PUB_SIG];
@@ -85,7 +94,8 @@ int main(int argc, char *argv[]) {
     RcvTempDec_ctor();
     SerDisp_ctor();
     Control_ctor();
-
+    Data_ctor();
+    Button_ctor();
 
     QF_init();    /* initialize the framework and the underlying RT kernel */
     BSP_init(); /* initialize the Board Support Package */
@@ -117,6 +127,17 @@ int main(int argc, char *argv[]) {
 
     QS_SIG_DICTIONARY(BTN_PRSS_SIG,  (void *)0);
     QS_SIG_DICTIONARY(BTN_REL_SIG,  (void *)0);
+    QS_SIG_DICTIONARY(BTN_SHORT_SIG,  (void *)0);
+    QS_SIG_DICTIONARY(BTN_EVT_SIG,  (void *)0);
+
+    QS_SIG_DICTIONARY(DELAY_TIMEOUT_SIG,  (void *)0);
+
+    QS_SIG_DICTIONARY(MIN_TEMP_SIG,  (void *)0);
+    QS_SIG_DICTIONARY(MAX_TEMP_SIG,  (void *)0);
+    QS_SIG_DICTIONARY(UPDATE_MINMAX_SIG,  (void *)0);
+
+    QS_SIG_DICTIONARY(RET_ORTHO_SIG,  (void *)0);
+    QS_SIG_DICTIONARY(MINMAX_TIMEOUT_SIG,  (void *)0);
 
 
 
@@ -186,6 +207,23 @@ int main(int argc, char *argv[]) {
                       (uint_fast8_t)(AO_Control_PRIO), /* QP priority of the AO */
 											controlQueueSto,             /* event queue storage */
                       Q_DIM(controlQueueSto),      /* queue length [events] */
+                      (void *)0,                 /* stack storage (not used) */
+                      0U,                        /* size of the stack [bytes] */
+                      (QEvt *)0);                /* initialization event */
+
+    //-------------------
+    QACTIVE_START(AO_Data,                  /* AO to start */
+                      (uint_fast8_t)(AO_Data_PRIO), /* QP priority of the AO */
+											dataQueueSto,             /* event queue storage */
+                      Q_DIM(dataQueueSto),      /* queue length [events] */
+                      (void *)0,                 /* stack storage (not used) */
+                      0U,                        /* size of the stack [bytes] */
+                      (QEvt *)0);                /* initialization event */
+    //-------------------
+    QACTIVE_START(AO_Button,                  /* AO to start */
+                      (uint_fast8_t)(AO_Button_PRIO), /* QP priority of the AO */
+											buttonQueueSto,             /* event queue storage */
+                      Q_DIM(buttonQueueSto),      /* queue length [events] */
                       (void *)0,                 /* stack storage (not used) */
                       0U,                        /* size of the stack [bytes] */
                       (QEvt *)0);                /* initialization event */

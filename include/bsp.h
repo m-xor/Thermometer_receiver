@@ -45,7 +45,9 @@
 				VW_STAT,
 				DUP_STAT,
 				VALERR_STAT,
-				HALT_STAT
+				HALT_STAT,
+				WD_STAT,
+				MINIMAX_STAT
     };
 #endif
 

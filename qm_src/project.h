@@ -25,8 +25,11 @@ enum ProjectSignals {
     //QEvt
     VW_SIG  = Q_USER_SIG,    //niskopoziomowy sterownik odebrał message (dobry lub zły to się okaże)
     TX_HALT_SIG,    //nadajnik zraportował nieudany start
-    BTN_PRSS_SIG,    //przycisk został wciśnięty
+    BTN_EVT_SIG,    //wykryto zmianę stanu przycisku
+    BTN_PRSS_SIG,    //przycisk został wciśnięty (generowany przy długim wciśnięciu)
     BTN_REL_SIG,    //przycisk został zwolniony
+    BTN_SHORT_SIG,    //krótkie przyciśnięcie (generowane przy zwalnaniu)
+
 
     //ErrEvt
     TX_ERR_SIG,    //błędy raportowane przez nadajnik
@@ -35,14 +38,20 @@ enum ProjectSignals {
     //ValEvt
     OTEMP_SIG,  /* odczyt temp czujnika zewn.*/
     BATT_SIG,    //odczyt napięcia baterii
+    MIN_TEMP_SIG,    //minimalna temperatura w  zadanym przedziale czasu
+    MAX_TEMP_SIG, //max temp. w zadanym przedziale
+
+    MAX_PUB_SIG,          /* the last published signal */
 
     //MsgEvt
     MSG_SIG,    //treść odebranego komunikatu
 
-    MAX_PUB_SIG,          /* the last published signal */
-
+    UPDATE_MINMAX_SIG,    //zlecenie przeszukania zapisanych danych i publikacji min i max
+    RET_ORTHO_SIG,    //rządanie powrotu z komponentu ortogonalnego
     DISP_BLINK_SIG,    //migotanie wyświetlacza
     ORTHO_BLINK_SIG,  //ticker dla komponentu ortogonalnego wyświetlacza
+    MINMAX_TIMEOUT_SIG,    //sygnał timeoutu dla komponentu orto pt. minimax
+    DELAY_TIMEOUT_SIG,    //AO_Data drop outs detection
     TIMEOUT_SIG,
 
     MAX_SIG                     /* the last signal */

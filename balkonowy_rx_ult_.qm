@@ -289,16 +289,18 @@ QF_PUBLISH((QEvt*)pe, me);</action>
    <attribute name="blinkEvt" type="QTimeEvt" visibility="0x02" properties="0x00">
     <documentation>Miganie wyświetlacza dla wartości temperatury otrzymanej dawno</documentation>
    </attribute>
-   <attribute name="orthoBlinkEvt" type="QTimeEvt" visibility="0x02" properties="0x00">
-    <documentation>Timer realizujący migotanie wskaźnika błędu</documentation>
-   </attribute>
    <attribute name="lastRoundTemp" type="int16_t" visibility="0x02" properties="0x00"/>
    <attribute name="orthoCompPtr" type="QHsm *" visibility="0x02" properties="0x00"/>
+   <attribute name="minmaxOrthoPtr" type="QHsm *" visibility="0x02" properties="0x00"/>
    <operation name="roundValue" type="int16_t" visibility="0x02" properties="0x00">
     <parameter name="val" type="int16_t"/>
     <parameter name="den" type="uint8_t"/>
     <code>(void)me;
 uint16_t value, rest=0;
+
+/* to not to lose special symbols coded out of range of variable*/
+if(val&gt;SPEC_SIGNS_GUARD)
+    return val;
 
 if(val == INT16_MIN)
 {
@@ -349,6 +351,7 @@ return ((val&lt;0)?-value:value);
      <action>(void)e;
 
 QHSM_INIT(me-&gt;orthoCompPtr, (QEvt *)0);
+QHSM_INIT(me-&gt;minmaxOrthoPtr, (QEvt *)0);
 
 QActive_subscribe(&amp;me-&gt;super, OTEMP_SIG);
 QActive_subscribe(&amp;me-&gt;super, BATT_SIG);
@@ -359,71 +362,122 @@ QActive_subscribe(&amp;me-&gt;super, TX_HALT_SIG);
 QActive_subscribe(&amp;me-&gt;super, BTN_PRSS_SIG);
 QActive_subscribe(&amp;me-&gt;super, BTN_REL_SIG);
 
+QActive_subscribe(&amp;me-&gt;super, MIN_TEMP_SIG);
+QActive_subscribe(&amp;me-&gt;super, MAX_TEMP_SIG);
+QActive_subscribe(&amp;me-&gt;super, BTN_SHORT_SIG);
+
 
 me-&gt;lastRoundTemp = NAN;
 
 QS_OBJ_DICTIONARY(AO_SerDisp);</action>
-     <initial_glyph conn="8,2,5,0,10,9">
+     <initial_glyph conn="8,2,5,0,11,3">
       <action box="0,-2,10,2"/>
      </initial_glyph>
     </initial>
     <state name="display">
-     <initial target="../8">
-      <initial_glyph conn="8,33,5,0,8,5">
+     <initial target="../12">
+      <initial_glyph conn="10,36,5,0,7,3">
        <action box="0,-2,10,2"/>
       </initial_glyph>
      </initial>
      <tran trig="TX_HALT">
       <action brief="forward">QHSM_DISPATCH(me-&gt;orthoCompPtr, (QEvt *)e); /* direct dispatch */</action>
-      <tran_glyph conn="5,18,3,-1,18">
+      <tran_glyph conn="6,10,3,-1,18">
        <action box="0,-2,17,2"/>
       </tran_glyph>
      </tran>
      <tran trig="TX_ERR">
       <action brief="forward">QHSM_DISPATCH(me-&gt;orthoCompPtr, (QEvt *)e); /* direct dispatch */</action>
-      <tran_glyph conn="5,20,3,-1,18">
+      <tran_glyph conn="6,12,3,-1,18">
        <action box="0,-2,17,2"/>
       </tran_glyph>
      </tran>
      <tran trig="ERR">
       <action brief="forward">QHSM_DISPATCH(me-&gt;orthoCompPtr, (QEvt *)e); /* direct dispatch */</action>
-      <tran_glyph conn="5,22,3,-1,18">
+      <tran_glyph conn="6,14,3,-1,18">
        <action box="0,-2,17,2"/>
       </tran_glyph>
      </tran>
      <tran trig="BATT">
       <action brief="forward">QHSM_DISPATCH(me-&gt;orthoCompPtr, (QEvt *)e); /* direct dispatch */</action>
-      <tran_glyph conn="5,24,3,-1,18">
+      <tran_glyph conn="6,16,3,-1,18">
        <action box="0,-2,17,2"/>
       </tran_glyph>
      </tran>
      <tran trig="ORTHO_BLINK">
       <action brief="forward">QHSM_DISPATCH(me-&gt;orthoCompPtr, (QEvt *)e); /* direct dispatch */</action>
-      <tran_glyph conn="5,27,3,-1,21">
+      <tran_glyph conn="6,18,3,-1,22">
+       <action box="0,-2,21,2"/>
+      </tran_glyph>
+     </tran>
+     <tran trig="OTEMP">
+      <action brief="save,(re)arm">me-&gt;lastRoundTemp =
+        SerDisp_roundValue(me,
+                Q_EVT_CAST(ValEvt)-&gt;value,
+                Q_EVT_CAST(ValEvt)-&gt;denom);
+
+
+QTimeEvt_rearm(&amp;me-&gt;timeoutEvt,  ASSUME_AGED);
+</action>
+      <tran_glyph conn="6,32,3,-1,24">
+       <action box="0,-2,19,2"/>
+      </tran_glyph>
+     </tran>
+     <tran trig="MINMAX_TIMEOUT">
+      <action brief="forward">QHSM_DISPATCH(me-&gt;minmaxOrthoPtr, (QEvt *)e); /* direct dispatch */</action>
+      <tran_glyph conn="6,26,3,-1,22">
+       <action box="0,-2,22,2"/>
+      </tran_glyph>
+     </tran>
+     <tran trig="MIN_TEMP">
+      <action brief="round,forward">ValEvt pe = { {MIN_TEMP_SIG, 0, 0}, 0, 0 };
+
+pe.value =
+    SerDisp_roundValue(me,
+            Q_EVT_CAST(ValEvt)-&gt;value,
+            Q_EVT_CAST(ValEvt)-&gt;denom);
+
+
+QHSM_DISPATCH(me-&gt;minmaxOrthoPtr, (QEvt *)&amp;pe); /* direct dispatch */</action>
+      <tran_glyph conn="6,22,3,-1,22">
+       <action box="0,-2,19,2"/>
+      </tran_glyph>
+     </tran>
+     <tran trig="MAX_TEMP">
+      <action brief="round forward">ValEvt pe = { {MAX_TEMP_SIG, 0, 0}, 0, 0 };
+
+pe.value =
+    SerDisp_roundValue(me,
+            Q_EVT_CAST(ValEvt)-&gt;value,
+            Q_EVT_CAST(ValEvt)-&gt;denom);
+
+
+QHSM_DISPATCH(me-&gt;minmaxOrthoPtr, (QEvt *)&amp;pe); /* direct dispatch */</action>
+      <tran_glyph conn="6,24,3,-1,22">
        <action box="0,-2,21,2"/>
       </tran_glyph>
      </tran>
      <state name="blink">
       <entry brief="arm period">QTimeEvt_armX(&amp;me-&gt;blinkEvt,  BLINK_DISPLAY, BLINK_DISPLAY);</entry>
       <exit brief="disarm">QTimeEvt_disarm(&amp;me-&gt;blinkEvt);</exit>
-      <initial target="../5">
-       <initial_glyph conn="49,42,4,3,4,3">
+      <initial target="../6">
+       <initial_glyph conn="50,42,4,3,4,3">
         <action box="0,-2,10,2"/>
        </initial_glyph>
       </initial>
-      <tran trig="TIMEOUT" target="../../8">
+      <tran trig="TIMEOUT" target="../../12">
        <action brief="save nan">me-&gt;lastRoundTemp = NAN;</action>
-       <tran_glyph conn="47,53,3,1,-15">
+       <tran_glyph conn="48,53,3,1,-15">
         <action box="-15,-2,16,2"/>
        </tran_glyph>
       </tran>
-      <tran trig="BTN_PRSS" target="../../7/3">
+      <tran trig="BTN_PRSS" target="../../11/2">
        <action brief="forward">QHSM_DISPATCH(me-&gt;orthoCompPtr, (QEvt *)e); /* direct dispatch */</action>
-       <tran_glyph conn="61,63,2,0,14">
+       <tran_glyph conn="55,63,2,0,14">
         <action box="-6,-2,17,2"/>
        </tran_glyph>
       </tran>
-      <tran trig="OTEMP" target="../../8">
+      <tran trig="OTEMP" target="../../12">
        <action brief="save,rearm">
 me-&gt;lastRoundTemp =
     SerDisp_roundValue(me,
@@ -432,77 +486,70 @@ me-&gt;lastRoundTemp =
 
 QTimeEvt_rearm(&amp;me-&gt;timeoutEvt,  ASSUME_AGED);
 </action>
-       <tran_glyph conn="47,56,3,1,-15">
+       <tran_glyph conn="48,56,3,1,-15">
         <action box="-15,-2,16,2"/>
+       </tran_glyph>
+      </tran>
+      <tran trig="BTN_SHORT" target="../../13/2">
+       <action brief="forward">QHSM_DISPATCH(me-&gt;minmaxOrthoPtr, (QEvt *)e); /* direct dispatch */</action>
+       <tran_glyph conn="69,63,2,0,41">
+        <action box="-4,-2,18,2"/>
        </tran_glyph>
       </tran>
       <state name="blink_on">
        <entry brief="update saved">led_display_number(me-&gt;lastRoundTemp, 10);
 led_show();</entry>
-       <tran trig="DISP_BLINK" target="../../5">
-        <tran_glyph conn="64,37,1,1,4,13,-4">
+       <tran trig="DISP_BLINK" target="../../6">
+        <tran_glyph conn="65,37,1,1,4,13,-4">
          <action box="-11,-2,10,2"/>
         </tran_glyph>
        </tran>
-       <state_glyph node="52,28,12,13">
+       <state_glyph node="53,28,12,13">
         <entry box="1,2,10,4"/>
        </state_glyph>
       </state>
       <state name="blink_off">
        <entry brief="update empty">led_clear_buff();
 led_show();</entry>
-       <tran trig="DISP_BLINK" target="../../4">
-        <tran_glyph conn="64,54,1,1,6,-21,-6">
+       <tran trig="DISP_BLINK" target="../../5">
+        <tran_glyph conn="65,54,1,1,6,-21,-6">
          <action box="-11,-2,10,2"/>
         </tran_glyph>
        </tran>
-       <state_glyph node="52,44,12,14">
+       <state_glyph node="53,44,12,14">
         <entry box="1,2,10,4"/>
        </state_glyph>
       </state>
-      <state_glyph node="47,20,25,43">
+      <state_glyph node="48,20,25,43">
        <entry box="1,2,7,2"/>
        <exit box="1,4,10,2"/>
       </state_glyph>
      </state>
      <state name="handover">
       <documentation>sterowanie wyświetlaczem przekazane do komponentu ortogonalnego</documentation>
-      <tran trig="TIMEOUT" target="../3">
+      <tran trig="TIMEOUT" target="../2">
        <action brief="arm">QTimeEvt_armX(&amp;me-&gt;timeoutEvt,  ASSUME_OUTDATED-ASSUME_AGED, 0U);</action>
-       <tran_glyph conn="10,81,3,3,35">
+       <tran_glyph conn="20,81,3,3,19">
         <action box="0,-2,13,2"/>
        </tran_glyph>
       </tran>
-      <tran trig="BTN_REL" target="../../8">
+      <tran trig="BTN_REL" target="../../12">
        <action brief="forward">QHSM_DISPATCH(me-&gt;orthoCompPtr, (QEvt *)e); /* direct dispatch */</action>
-       <tran_glyph conn="24,70,0,2,-7">
+       <tran_glyph conn="31,70,0,2,-7">
         <action box="-3,2,16,2"/>
-       </tran_glyph>
-      </tran>
-      <tran trig="OTEMP">
-       <action brief="save,(re)arm">
-me-&gt;lastRoundTemp =
-    SerDisp_roundValue(me,
-            Q_EVT_CAST(ValEvt)-&gt;value,
-            Q_EVT_CAST(ValEvt)-&gt;denom);
-
-QTimeEvt_rearm(&amp;me-&gt;timeoutEvt,  ASSUME_AGED);
-</action>
-       <tran_glyph conn="10,78,3,-1,17">
-        <action box="0,-2,19,2"/>
        </tran_glyph>
       </tran>
       <state name="handover_blink">
        <documentation>sterowanie wyświetlaczem przekazane do komponentu ortogonalnego</documentation>
-       <tran trig="BTN_REL" target="../../../6">
+       <tran trig="BTN_REL" target="../../../10">
         <action brief="forward">QHSM_DISPATCH(me-&gt;orthoCompPtr, (QEvt *)e); /* direct dispatch */</action>
-        <tran_glyph conn="66,77,0,2,-14">
+        <tran_glyph conn="59,77,0,2,-14">
          <action box="-8,2,16,2"/>
         </tran_glyph>
        </tran>
        <tran trig="TIMEOUT" target="../..">
         <action brief="save nan">me-&gt;lastRoundTemp = NAN;</action>
-        <tran_glyph conn="45,84,3,3,-35">
+        <tran_glyph conn="39,84,3,3,-19">
          <action box="-9,-2,16,2"/>
         </tran_glyph>
        </tran>
@@ -515,28 +562,28 @@ me-&gt;lastRoundTemp =
 
 QTimeEvt_rearm(&amp;me-&gt;timeoutEvt,  ASSUME_AGED);
 </action>
-        <tran_glyph conn="45,87,3,3,-35">
+        <tran_glyph conn="39,87,3,3,-19">
          <action box="-9,-2,15,2"/>
         </tran_glyph>
        </tran>
-       <state_glyph node="45,77,24,13"/>
+       <state_glyph node="39,77,23,13"/>
       </state>
-      <state_glyph node="10,70,62,23"/>
+      <state_glyph node="20,70,47,23"/>
      </state>
      <state name="run">
       <entry brief="update">
 led_display_number(me-&gt;lastRoundTemp, 10);
 led_show();
 </entry>
-      <tran trig="BTN_PRSS" target="../../7">
+      <tran trig="BTN_PRSS" target="../../11">
        <action brief="forward">QHSM_DISPATCH(me-&gt;orthoCompPtr, (QEvt *)e); /* direct dispatch */</action>
-       <tran_glyph conn="19,63,2,0,7">
+       <tran_glyph conn="27,63,2,0,7">
         <action box="-7,-3,18,2"/>
        </tran_glyph>
       </tran>
-      <tran trig="TIMEOUT" target="../../6">
+      <tran trig="TIMEOUT" target="../../10">
        <action brief="arm">QTimeEvt_armX(&amp;me-&gt;timeoutEvt,  ASSUME_OUTDATED-ASSUME_AGED, 0U);</action>
-       <tran_glyph conn="32,51,1,3,15">
+       <tran_glyph conn="33,51,1,3,15">
         <action box="0,-2,14,2"/>
        </tran_glyph>
       </tran>
@@ -553,17 +600,64 @@ me-&gt;lastRoundTemp = SerDisp_roundValue(me,
 led_display_number(me-&gt;lastRoundTemp, 10);
 led_show();
 </action>
-       <tran_glyph conn="10,47,3,-1,19">
+       <tran_glyph conn="11,47,3,-1,19">
         <action box="0,-2,22,2"/>
        </tran_glyph>
       </tran>
-      <state_glyph node="10,38,22,25">
+      <tran trig="BTN_SHORT" target="../../13">
+       <action brief="forward">QHSM_DISPATCH(me-&gt;minmaxOrthoPtr, (QEvt *)e); /* direct dispatch */</action>
+       <tran_glyph conn="13,63,2,0,36">
+        <action box="-7,-2,18,3"/>
+       </tran_glyph>
+      </tran>
+      <state_glyph node="11,39,22,24">
        <entry box="1,2,10,2"/>
       </state_glyph>
      </state>
-     <state_glyph node="5,11,70,86"/>
+     <state name="minimax">
+      <tran trig="RET_ORTHO" target="../../12">
+       <tran_glyph conn="15,99,0,2,-36">
+        <action box="0,-2,10,2"/>
+       </tran_glyph>
+      </tran>
+      <tran trig="TIMEOUT" target="../2">
+       <action brief="arm">QTimeEvt_armX(&amp;me-&gt;timeoutEvt,  ASSUME_OUTDATED-ASSUME_AGED, 0U);</action>
+       <tran_glyph conn="10,112,3,3,39">
+        <action box="0,-2,15,2"/>
+       </tran_glyph>
+      </tran>
+      <state name="minimax_blink">
+       <tran trig="RET_ORTHO" target="../../../10">
+        <tran_glyph conn="71,104,0,2,-41">
+         <action box="0,-2,10,2"/>
+        </tran_glyph>
+       </tran>
+       <tran trig="OTEMP" target="../..">
+        <action brief="save, rearm">
+me-&gt;lastRoundTemp =
+    SerDisp_roundValue(me,
+            Q_EVT_CAST(ValEvt)-&gt;value,
+            Q_EVT_CAST(ValEvt)-&gt;denom);
+
+QTimeEvt_rearm(&amp;me-&gt;timeoutEvt,  ASSUME_AGED);
+</action>
+        <tran_glyph conn="49,118,3,3,-39">
+         <action box="-16,-2,16,2"/>
+        </tran_glyph>
+       </tran>
+       <tran trig="TIMEOUT" target="../..">
+        <action brief="save nan">me-&gt;lastRoundTemp = NAN;</action>
+        <tran_glyph conn="49,115,3,3,-39">
+         <action box="-16,-2,16,2"/>
+        </tran_glyph>
+       </tran>
+       <state_glyph node="49,104,25,15"/>
+      </state>
+      <state_glyph node="10,99,66,23"/>
+     </state>
+     <state_glyph node="6,5,72,119"/>
     </state>
-    <state_diagram size="80,98"/>
+    <state_diagram size="84,126"/>
    </statechart>
   </class>
   <class name="SerDispErr" superclass="qpc::QHsm">
@@ -572,51 +666,45 @@ led_show();
    <attribute name="txHalt" type="uint8_t" visibility="0x02" properties="0x00"/>
    <attribute name="txErr" type="uint8_t" visibility="0x02" properties="0x00"/>
    <attribute name="err" type="uint8_t" visibility="0x02" properties="0x00"/>
-   <attribute name="blinkEvtPtr" type="QTimeEvt *" visibility="0x02" properties="0x00"/>
+   <attribute name="blinkEvt" type="QTimeEvt" visibility="0x02" properties="0x00"/>
    <statechart properties="QS_FUN_DICT">
     <initial target="../1/6">
      <action>(void)e;
 
-me-&gt;batt = NANB;
-me-&gt;txHalt = 0;
-me-&gt;txErr = 0;
-me-&gt;err = 0;
-
-
 QS_OBJ_DICTIONARY(&amp;l_serDispErr);</action>
-     <initial_glyph conn="3,2,4,3,23,5">
+     <initial_glyph conn="3,2,4,3,23,6">
       <action box="0,-2,10,2"/>
      </initial_glyph>
     </initial>
     <state name="container">
      <tran trig="BATT">
       <action brief="save">me-&gt;batt =  Q_EVT_CAST(ValEvt)-&gt;value;</action>
-      <tran_glyph conn="5,8,3,-1,17">
+      <tran_glyph conn="6,8,3,-1,17">
        <action box="0,-2,10,2"/>
       </tran_glyph>
      </tran>
      <tran trig="TX_HALT">
       <action brief="save">me-&gt;txHalt = 1;</action>
-      <tran_glyph conn="5,10,3,-1,17">
+      <tran_glyph conn="6,10,3,-1,17">
        <action box="0,-2,13,2"/>
       </tran_glyph>
      </tran>
      <tran trig="TX_ERR">
       <action brief="save">me-&gt;txErr |= Q_EVT_CAST(ErrEvt)-&gt;errCode;</action>
-      <tran_glyph conn="5,12,3,-1,17">
+      <tran_glyph conn="6,12,3,-1,17">
        <action box="0,-2,14,2"/>
       </tran_glyph>
      </tran>
      <tran trig="ERR">
       <action brief="save">me-&gt;err |= Q_EVT_CAST(ErrEvt)-&gt;errCode;</action>
-      <tran_glyph conn="5,14,3,-1,17">
+      <tran_glyph conn="6,14,3,-1,17">
        <action box="0,-2,10,2"/>
       </tran_glyph>
      </tran>
      <tran trig="BTN_PRSS">
       <choice target="../../8/0">
        <guard brief="halt">me-&gt;txHalt</guard>
-       <choice_glyph conn="15,55,5,3,10">
+       <choice_glyph conn="16,55,5,3,10">
         <action box="1,-2,26,2"/>
        </choice_glyph>
       </choice>
@@ -624,7 +712,7 @@ QS_OBJ_DICTIONARY(&amp;l_serDispErr);</action>
        <guard brief="else"/>
        <choice target="../../../8/1">
         <guard brief="tx_err">me-&gt;txErr</guard>
-        <choice_glyph conn="15,63,5,3,10">
+        <choice_glyph conn="16,63,5,3,10">
          <action box="1,-2,29,2"/>
         </choice_glyph>
        </choice>
@@ -632,91 +720,91 @@ QS_OBJ_DICTIONARY(&amp;l_serDispErr);</action>
         <guard brief="else"/>
         <choice target="../../../../8/2">
          <guard brief="err">me-&gt;err</guard>
-         <choice_glyph conn="15,70,5,3,10">
+         <choice_glyph conn="16,70,5,3,10">
           <action box="1,-2,26,2"/>
          </choice_glyph>
         </choice>
         <choice target="../../../../9">
          <guard brief="else"/>
-         <choice_glyph conn="15,70,4,3,8,10">
+         <choice_glyph conn="16,70,4,3,8,10">
           <action box="0,5,25,2"/>
          </choice_glyph>
         </choice>
-        <choice_glyph conn="15,63,4,-1,7">
+        <choice_glyph conn="16,63,4,-1,7">
          <action box="1,0,10,2"/>
         </choice_glyph>
        </choice>
-       <choice_glyph conn="15,55,4,-1,8">
+       <choice_glyph conn="16,55,4,-1,8">
         <action box="1,0,10,2"/>
        </choice_glyph>
       </choice>
-      <tran_glyph conn="5,55,3,-1,10">
+      <tran_glyph conn="6,55,3,-1,10">
        <action box="0,-2,10,2"/>
       </tran_glyph>
      </tran>
      <tran trig="BTN_REL">
       <choice target="../../7/1">
        <guard brief="is_error">me-&gt;txHalt || me-&gt;txErr || me-&gt;err</guard>
-       <choice_glyph conn="15,40,5,3,15">
+       <choice_glyph conn="16,40,5,3,17">
         <action box="2,-2,10,2"/>
        </choice_glyph>
       </choice>
       <choice target="../../6">
        <guard brief="else"/>
-       <choice_glyph conn="15,40,4,2,-6">
+       <choice_glyph conn="16,40,4,2,-6">
         <action box="0,-5,10,2"/>
        </choice_glyph>
       </choice>
-      <tran_glyph conn="5,40,3,-1,10">
+      <tran_glyph conn="6,40,3,-1,10">
        <action box="0,-2,10,2"/>
       </tran_glyph>
      </tran>
      <state name="idle">
       <tran trig="TX_HALT" target="../../7/1">
        <action brief="save">me-&gt;txHalt = 1;</action>
-       <tran_glyph conn="21,26,1,3,9">
+       <tran_glyph conn="22,26,1,3,11">
         <action box="-12,-2,12,2"/>
        </tran_glyph>
       </tran>
       <tran trig="TX_ERR" target="../../7/1">
        <action brief="save">me-&gt;txErr |= Q_EVT_CAST(ErrEvt)-&gt;errCode;</action>
-       <tran_glyph conn="21,29,1,3,9">
+       <tran_glyph conn="22,29,1,3,11">
         <action box="-12,-2,14,2"/>
        </tran_glyph>
       </tran>
       <tran trig="ERR" target="../../7/1">
        <action brief="save">me-&gt;err |= Q_EVT_CAST(ErrEvt)-&gt;errCode;</action>
-       <tran_glyph conn="21,32,1,3,9">
+       <tran_glyph conn="22,32,1,3,11">
         <action box="-12,-2,10,2"/>
        </tran_glyph>
       </tran>
-      <state_glyph node="8,21,13,13"/>
+      <state_glyph node="9,21,13,13"/>
      </state>
      <state name="error">
-      <exit brief="disarm">QTimeEvt_disarm(me-&gt;blinkEvtPtr);</exit>
+      <exit brief="disarm">QTimeEvt_disarm(&amp;me-&gt;blinkEvt);</exit>
       <tran trig="ORTHO_BLINK" target="../1">
-       <tran_glyph conn="58,27,1,1,-12">
+       <tran_glyph conn="60,27,1,1,-11">
         <action box="-11,-2,15,2"/>
        </tran_glyph>
       </tran>
       <state name="on">
        <entry brief="arm once, led on">led_notify_error(true);
 led_show();
-QTimeEvt_armX(me-&gt;blinkEvtPtr,  LED_ON, 0U);</entry>
+QTimeEvt_armX(&amp;me-&gt;blinkEvt,  LED_ON, 0U);</entry>
        <exit brief="led off">led_notify_error(false);
 led_show();</exit>
        <tran trig="ORTHO_BLINK" target="../..">
-        <action brief="arm once">QTimeEvt_armX(me-&gt;blinkEvtPtr,  LED_OFF, 0U);</action>
-        <tran_glyph conn="46,31,1,1,12">
+        <action brief="arm once">QTimeEvt_armX(&amp;me-&gt;blinkEvt,  LED_OFF, 0U);</action>
+        <tran_glyph conn="49,31,1,1,11">
          <action box="-11,-2,21,2"/>
         </tran_glyph>
        </tran>
-       <state_glyph node="30,18,16,23">
+       <state_glyph node="33,18,16,23">
         <entry box="1,2,14,2"/>
         <exit box="1,4,15,2"/>
        </state_glyph>
       </state>
-      <state_glyph node="27,11,31,32">
+      <state_glyph node="29,11,31,32">
        <exit box="1,2,9,2"/>
       </state_glyph>
      </state>
@@ -729,7 +817,7 @@ led_notify_error(true);
 led_show();
 
 me-&gt;txHalt = 0;</entry>
-       <state_glyph node="25,52,27,6">
+       <state_glyph node="26,52,27,6">
         <entry box="1,2,24,2"/>
        </state_glyph>
       </state>
@@ -740,7 +828,7 @@ led_notify_error(true);
 led_show();
 
 me-&gt;txErr = 0;</entry>
-       <state_glyph node="25,60,27,6">
+       <state_glyph node="26,60,27,6">
         <entry box="1,2,25,2"/>
        </state_glyph>
       </state>
@@ -757,11 +845,11 @@ if( (me-&gt;err!=ERR_ASSERT_FAILED) &amp;&amp; (me-&gt;err != ERR_WD_RESET))
     rerr_reset();
 
 me-&gt;err = 0;</entry>
-       <state_glyph node="25,68,27,6">
+       <state_glyph node="26,68,27,6">
         <entry box="1,2,26,2"/>
        </state_glyph>
       </state>
-      <state_glyph node="22,46,36,29">
+      <state_glyph node="23,46,36,29">
        <exit box="1,2,6,2"/>
       </state_glyph>
      </state>
@@ -769,13 +857,126 @@ me-&gt;err = 0;</entry>
       <entry brief="display battt; err:0, minus:0">led_display_number(me-&gt;batt, 10);
 //led_notify_error(false);
 led_show();</entry>
-      <state_glyph node="25,76,27,6">
+      <state_glyph node="26,76,27,6">
        <entry box="1,2,24,2"/>
       </state_glyph>
      </state>
-     <state_glyph node="5,4,63,82"/>
+     <state_glyph node="6,4,63,82"/>
     </state>
     <state_diagram size="80,98"/>
+   </statechart>
+  </class>
+  <class name="SerDispMinMax" superclass="qpc::QHsm">
+   <attribute name="minRound" type="int16_t" visibility="0x02" properties="0x00"/>
+   <attribute name="maxRound" type="int16_t" visibility="0x02" properties="0x00"/>
+   <attribute name="timeoutEvt" type="QTimeEvt" visibility="0x02" properties="0x00"/>
+   <attribute name="superAO" type="QActive  *" visibility="0x02" properties="0x00"/>
+   <statechart properties="QS_FUN_DICT">
+    <initial target="../1/2">
+     <action>(void)e;
+
+QS_OBJ_DICTIONARY(&amp;l_serDispMinMax);</action>
+     <initial_glyph conn="4,6,4,3,13,10">
+      <action box="0,-2,10,2"/>
+     </initial_glyph>
+    </initial>
+    <state name="container">
+     <tran trig="MIN_TEMP">
+      <action brief="save">me-&gt;minRound = Q_EVT_CAST(ValEvt)-&gt;value;</action>
+      <tran_glyph conn="7,10,3,-1,16">
+       <action box="0,-2,15,2"/>
+      </tran_glyph>
+     </tran>
+     <tran trig="MAX_TEMP">
+      <action brief="save">me-&gt;maxRound = Q_EVT_CAST(ValEvt)-&gt;value;</action>
+      <tran_glyph conn="7,12,3,-1,16">
+       <action box="0,-2,15,2"/>
+      </tran_glyph>
+     </tran>
+     <state name="idle">
+      <entry brief="post RET_ORTHO_SIG">QACTIVE_POST(me-&gt;superAO,Q_NEW(QEvt, RET_ORTHO_SIG), me);</entry>
+      <tran trig="BTN_SHORT" target="../../3">
+       <tran_glyph conn="35,22,1,1,10,9,-10">
+        <action box="0,-2,15,2"/>
+       </tran_glyph>
+      </tran>
+      <state_glyph node="14,15,21,9">
+       <entry box="1,2,7,2"/>
+      </state_glyph>
+     </state>
+     <state name="floor">
+      <entry brief="arm, display">QTimeEvt_armX(&amp;me-&gt;timeoutEvt,  MIN_DESC_TICKS, 0U);
+
+led_msg(FLOOR_MSG);
+led_show();</entry>
+      <tran trig="MINMAX_TIMEOUT" target="../../4">
+       <tran_glyph conn="35,36,1,1,9,10,-9">
+        <action box="0,-2,19,2"/>
+       </tran_glyph>
+      </tran>
+      <state_glyph node="14,28,21,10">
+       <entry box="1,2,15,2"/>
+      </state_glyph>
+     </state>
+     <state name="min">
+      <entry brief="arm, display">QTimeEvt_armX(&amp;me-&gt;timeoutEvt,  MIN_TICKS, 0U);
+
+led_display_number(me-&gt;minRound, 10);
+led_show();</entry>
+      <tran trig="MINMAX_TIMEOUT" target="../../5">
+       <tran_glyph conn="35,50,1,1,9,10,-10">
+        <action box="0,-2,15,2"/>
+       </tran_glyph>
+      </tran>
+      <state_glyph node="14,42,21,10">
+       <entry box="1,2,14,2"/>
+      </state_glyph>
+     </state>
+     <state name="ceil">
+      <entry brief="arm, display">QTimeEvt_armX(&amp;me-&gt;timeoutEvt,  MAX_DESC_TICKS, 0U);
+
+led_msg(CEIL_MSG);
+led_show();</entry>
+      <tran trig="MINMAX_TIMEOUT" target="../../6">
+       <tran_glyph conn="34,63,1,1,9,10,-9">
+        <action box="0,-2,15,2"/>
+       </tran_glyph>
+      </tran>
+      <state_glyph node="14,56,20,9">
+       <entry box="1,2,12,2"/>
+      </state_glyph>
+     </state>
+     <state name="max">
+      <entry brief="arm, display">QTimeEvt_armX(&amp;me-&gt;timeoutEvt,  MAX_TICKS, 0U);
+
+led_display_number(me-&gt;maxRound, 10);
+led_show();</entry>
+      <tran trig="MINMAX_TIMEOUT" target="../../7">
+       <tran_glyph conn="34,76,1,1,9,10,-10">
+        <action box="0,-2,16,2"/>
+       </tran_glyph>
+      </tran>
+      <state_glyph node="14,69,20,9">
+       <entry box="1,2,14,2"/>
+      </state_glyph>
+     </state>
+     <state name="trend">
+      <entry brief="arm, display">QTimeEvt_armX(&amp;me-&gt;timeoutEvt,  TREND_TICKS, 0U);
+
+led_msg(FLAT_TREND_MSG);
+led_show();</entry>
+      <tran trig="MINMAX_TIMEOUT" target="../../2">
+       <tran_glyph conn="33,92,1,1,18,-75,-16">
+        <action box="0,-2,16,2"/>
+       </tran_glyph>
+      </tran>
+      <state_glyph node="14,83,19,11">
+       <entry box="1,2,13,2"/>
+      </state_glyph>
+     </state>
+     <state_glyph node="7,5,61,96"/>
+    </state>
+    <state_diagram size="80,109"/>
    </statechart>
   </class>
   <class name="Control" superclass="qpc::QActive">
@@ -803,6 +1004,168 @@ led_show();</entry>
     <state_diagram size="80,50"/>
    </statechart>
   </class>
+  <class name="Data" superclass="qpc::QActive">
+   <documentation>Saves </documentation>
+   <attribute name="timer" type="QTimeEvt" visibility="0x02" properties="0x00">
+    <documentation>Watching if messages don't drop</documentation>
+   </attribute>
+   <attribute name="delay" type="QTimeEvt" visibility="0x02" properties="0x00">
+    <documentation>margin for messages period</documentation>
+   </attribute>
+   <attribute name="denominator" type="uint8_t" visibility="0x02" properties="0x00"/>
+   <operation name="pubData" type="void" visibility="0x02" properties="0x00">
+    <parameter name="min" type="int16_t"/>
+    <parameter name="max" type="int16_t"/>
+    <code>ValEvt *pe = Q_NEW(ValEvt, MIN_TEMP_SIG);
+pe-&gt;denom = me-&gt;denominator;
+pe-&gt;value = min;
+QF_PUBLISH((QEvt*)pe, me);
+pe = Q_NEW(ValEvt, MAX_TEMP_SIG);
+pe-&gt;denom = me-&gt;denominator;
+pe-&gt;value = max;
+QF_PUBLISH((QEvt*)pe, me);
+
+QS_BEGIN(MINIMAX_STAT,me)
+    QS_I16(0, min); 
+    QS_I16(0, max); 
+    QS_I16(0, me-&gt;denominator); 
+QS_END()   </code>
+   </operation>
+   <statechart properties="QS_FUN_DICT">
+    <initial target="../1/2">
+     <action>(void)e;
+
+//for(int16_t i=0; i&lt;DATA_STOR_SIZE; i++)
+//{
+//    me-&gt;storage[i] = DROP_MARK;
+//}
+//me-&gt;current_index = 0;
+//me-&gt;denominator = 0;
+
+data_init();
+
+QActive_subscribe(&amp;me-&gt;super, OTEMP_SIG);
+
+QTimeEvt_armX(&amp;me-&gt;timer,  MESSAGE_PERIOD, MESSAGE_PERIOD);
+
+QS_OBJ_DICTIONARY(&amp;l_data);</action>
+     <initial_glyph conn="2,2,4,3,32,8">
+      <action box="0,-2,10,2"/>
+     </initial_glyph>
+    </initial>
+    <state name="cont">
+     <tran trig="UPDATE_MINMAX">
+      <action brief="compute &amp; publish MIN MAX">int16_t min, max;
+data_get(&amp;min, &amp;max);
+Data_pubData(me,
+    (min==DROP_MARK)?NAN_MINMAX:min,
+    (max==DROP_MARK)?NAN_MINMAX:max);</action>
+      <tran_glyph conn="7,14,3,-1,36">
+       <action box="0,-2,35,2"/>
+      </tran_glyph>
+     </tran>
+     <state name="delay">
+      <entry brief="arm delay once">QTimeEvt_armX(&amp;me-&gt;delay,  MESSAGE_MARGIN, 0);</entry>
+      <exit brief="request comp&amp;pub">QACTIVE_POST(&amp;me-&gt;super,Q_NEW(QEvt, UPDATE_MINMAX_SIG), me);</exit>
+      <tran trig="OTEMP" target="../../2">
+       <action brief="save temp, rearm timer">QTimeEvt_rearm(&amp;me-&gt;timer,  MESSAGE_PERIOD);
+//Data_saveData(me,Q_EVT_CAST(ValEvt)-&gt;value, Q_EVT_CAST(ValEvt)-&gt;denom);
+data_save(Q_EVT_CAST(ValEvt)-&gt;value);
+me-&gt;denominator = Q_EVT_CAST(ValEvt)-&gt;denom;</action>
+       <tran_glyph conn="38,33,3,1,-12">
+        <action box="0,-2,18,4"/>
+       </tran_glyph>
+      </tran>
+      <tran trig="DELAY_TIMEOUT" target="../../2">
+       <action brief="save drop">//Data_saveData(me,DROP_MARK, me-&gt;denominator);
+data_save(DROP_MARK);</action>
+       <tran_glyph conn="38,39,3,1,-12">
+        <action box="0,-2,17,4"/>
+       </tran_glyph>
+      </tran>
+      <state_glyph node="38,22,18,21">
+       <entry box="1,2,14,2"/>
+       <exit box="1,4,17,4"/>
+      </state_glyph>
+     </state>
+     <state name="wait">
+      <tran trig="OTEMP">
+       <action brief="rearm timer, save temp, request comp&amp;pub">QTimeEvt_rearm(&amp;me-&gt;timer,  MESSAGE_PERIOD);
+
+//Data_saveData(me,Q_EVT_CAST(ValEvt)-&gt;value, Q_EVT_CAST(ValEvt)-&gt;denom);
+data_save(Q_EVT_CAST(ValEvt)-&gt;value);
+me-&gt;denominator = Q_EVT_CAST(ValEvt)-&gt;denom;
+
+//QEvt *pe = Q_NEW(QEvt, UPDATE_MINMAX_SIG);
+//QACTIVE_POST(AO_Data,pe, me);
+
+QACTIVE_POST(&amp;me-&gt;super,Q_NEW(QEvt, UPDATE_MINMAX_SIG), me);</action>
+       <tran_glyph conn="10,27,3,-1,13">
+        <action box="0,-2,16,7"/>
+       </tran_glyph>
+      </tran>
+      <tran trig="TIMEOUT" target="../../1">
+       <tran_glyph conn="26,27,1,3,12">
+        <action box="0,-2,10,2"/>
+       </tran_glyph>
+      </tran>
+      <state_glyph node="10,22,16,20"/>
+     </state>
+     <state_glyph node="7,4,54,41"/>
+    </state>
+    <state_diagram size="80,50"/>
+   </statechart>
+  </class>
+  <class name="Button" superclass="qpc::QActive">
+   <attribute name="timer" type="QTimeEvt" visibility="0x02" properties="0x00"/>
+   <statechart properties="QS_FUN_DICT">
+    <initial target="../1">
+     <action>QActive_subscribe(&amp;me-&gt;super, BTN_EVT_SIG);
+
+QS_OBJ_DICTIONARY(AO_Button);
+
+(void)e;</action>
+     <initial_glyph conn="10,4,5,0,6,3">
+      <action box="0,-2,10,2"/>
+     </initial_glyph>
+    </initial>
+    <state name="idle">
+     <tran trig="BTN_EVT" target="../../2">
+      <action brief="arm">QTimeEvt_rearm(&amp;me-&gt;timer,  LONG_PRESS_TICKS);
+//QTimeEvt_armX(&amp;me-&gt;timer,  LONG_PRESS_TICKS, 0);</action>
+      <tran_glyph conn="22,15,1,1,18,10,-18">
+       <action box="0,-2,14,2"/>
+      </tran_glyph>
+     </tran>
+     <state_glyph node="10,7,12,11"/>
+    </state>
+    <state name="pressed">
+     <tran trig="TIMEOUT" target="../../3">
+      <action brief="pub LONG">QF_PUBLISH(Q_NEW(QEvt, BTN_PRSS_SIG), me);</action>
+      <tran_glyph conn="22,31,1,1,20,9,-20">
+       <action box="0,-2,20,2"/>
+      </tran_glyph>
+     </tran>
+     <tran trig="BTN_EVT" target="../../1">
+      <action brief="pub SHORT">QF_PUBLISH(Q_NEW(QEvt, BTN_SHORT_SIG), me);</action>
+      <tran_glyph conn="22,28,1,1,20,-16,-20">
+       <action box="0,-2,20,2"/>
+      </tran_glyph>
+     </tran>
+     <state_glyph node="10,22,12,11"/>
+    </state>
+    <state name="longPressed">
+     <tran trig="BTN_EVT" target="../../1">
+      <action brief="pub REL">QF_PUBLISH(Q_NEW(QEvt, BTN_REL_SIG), me);</action>
+      <tran_glyph conn="22,43,1,1,23,-33,-23">
+       <action box="0,-2,20,2"/>
+      </tran_glyph>
+     </tran>
+     <state_glyph node="10,36,12,10"/>
+    </state>
+    <state_diagram size="80,54"/>
+   </statechart>
+  </class>
   <attribute name="AO_SerDisp" type="QActive * const" visibility="0x00" properties="0x00">
    <code>= &amp;l_serDisp.super;</code>
   </attribute>
@@ -812,6 +1175,12 @@ led_show();</entry>
   </attribute>
   <attribute name="AO_Control" type="QActive * const" visibility="0x00" properties="0x00">
    <code>= &amp;l_control.super;</code>
+  </attribute>
+  <attribute name="AO_Data" type="QActive * const" visibility="0x00" properties="0x00">
+   <code>= &amp;l_data.super;</code>
+  </attribute>
+  <attribute name="AO_Button" type="QActive * const" visibility="0x00" properties="0x00">
+   <code>= &amp;l_button.super;</code>
   </attribute>
   <operation name="Rcv_ctor" type="void" visibility="0x00" properties="0x00">
    <code>Rcv * const me = &amp;l_rcv;
@@ -846,9 +1215,11 @@ QActive_ctor(&amp;me-&gt;super, Q_STATE_CAST(&amp;RcvTempDec_initial));
 
 QActive_ctor(&amp;me-&gt;super, Q_STATE_CAST(&amp;SerDisp_initial));
 
-//inicjacja komponentu ortho oraz timera na jego potrzeby
-me-&gt;orthoCompPtr = SerDispErr_ctor(&amp;me-&gt;orthoBlinkEvt);
-QTimeEvt_ctorX(&amp;me-&gt;orthoBlinkEvt, &amp;me-&gt;super, ORTHO_BLINK_SIG, HARD_TICKRATE_1);
+//inicjacja komponentu ortho 
+me-&gt;orthoCompPtr = SerDispErr_ctor(&amp;me-&gt;super);
+
+//inicjacja drugiego komponentu ortogonalnego
+me-&gt;minmaxOrthoPtr = SerDispMinMax_ctor(&amp;me-&gt;super);
 
 //inicjacja timerów
 QTimeEvt_ctorX(&amp;me-&gt;blinkEvt, &amp;me-&gt;super, DISP_BLINK_SIG, HARD_TICKRATE_1);
@@ -857,13 +1228,33 @@ QTimeEvt_ctorX(&amp;me-&gt;blinkEvt, &amp;me-&gt;super, DISP_BLINK_SIG, HARD_TIC
 QTimeEvt_ctorX(&amp;me-&gt;timeoutEvt, &amp;me-&gt;super, TIMEOUT_SIG, SOFT_TICKRATE_0);</code>
   </operation>
   <operation name="SerDispErr_ctor" type="QHsm *" visibility="0x00" properties="0x00">
-   <parameter name="blinkEvt" type="QTimeEvt * const"/>
+   <parameter name="superAO" type="QActive * const"/>
    <code>SerDispErr *me = &amp;l_serDispErr;
 
 /* superclass' ctor */
 QHsm_ctor(&amp;me-&gt;super, Q_STATE_CAST(&amp;SerDispErr_initial));
+/* superAO will dispatch event down to me */
+QTimeEvt_ctorX(&amp;me-&gt;blinkEvt, superAO, ORTHO_BLINK_SIG, HARD_TICKRATE_1);
 
-me-&gt;blinkEvtPtr = blinkEvt;
+me-&gt;batt = NANB;
+me-&gt;txHalt = 0;
+me-&gt;txErr = 0;
+me-&gt;err = 0;
+
+return (QHsm *)me;</code>
+  </operation>
+  <operation name="SerDispMinMax_ctor" type="QHsm *" visibility="0x00" properties="0x00">
+   <parameter name="superAO" type="QActive * const"/>
+   <code>SerDispMinMax *me = &amp;l_serDispMinMax;
+
+/* superclass' ctor */
+QHsm_ctor(&amp;me-&gt;super, Q_STATE_CAST(&amp;SerDispMinMax_initial));
+/* superAO will dispatch event down to me */
+QTimeEvt_ctorX(&amp;me-&gt;timeoutEvt, superAO, MINMAX_TIMEOUT_SIG, HARD_TICKRATE_1);
+
+me-&gt;minRound = NAN;
+me-&gt;maxRound = NAN;
+me-&gt;superAO = superAO;
 
 return (QHsm *)me;</code>
   </operation>
@@ -874,6 +1265,23 @@ QActive_ctor(&amp;me-&gt;super, Q_STATE_CAST(&amp;Control_initial));
 
 //inicjacja timera
 QTimeEvt_ctorX(&amp;me-&gt;timeout, &amp;me-&gt;super, TIMEOUT_SIG, HARD_TICKRATE_1);</code>
+  </operation>
+  <operation name="Data_ctor" type="void" visibility="0x00" properties="0x00">
+   <code>Data * const me = &amp;l_data;
+
+QActive_ctor(&amp;me-&gt;super, Q_STATE_CAST(&amp;Data_initial));
+
+//inicjacja timera
+QTimeEvt_ctorX(&amp;me-&gt;timer, &amp;me-&gt;super, TIMEOUT_SIG, SOFT_TICKRATE_0);
+QTimeEvt_ctorX(&amp;me-&gt;delay, &amp;me-&gt;super, DELAY_TIMEOUT_SIG, HARD_TICKRATE_1);</code>
+  </operation>
+  <operation name="Button_ctor" type="void" visibility="0x00" properties="0x00">
+   <code>Button * const me = &amp;l_button;
+
+QActive_ctor(&amp;me-&gt;super, Q_STATE_CAST(&amp;Button_initial));
+
+//inicjacja timera
+QTimeEvt_ctorX(&amp;me-&gt;timer, &amp;me-&gt;super, TIMEOUT_SIG, HARD_TICKRATE_1);</code>
   </operation>
  </package>
  <directory name="qm_src">
@@ -887,8 +1295,11 @@ enum ProjectSignals {
     //QEvt
     VW_SIG  = Q_USER_SIG,    //niskopoziomowy sterownik odebrał message (dobry lub zły to się okaże)
     TX_HALT_SIG,    //nadajnik zraportował nieudany start 
-    BTN_PRSS_SIG,    //przycisk został wciśnięty
+    BTN_EVT_SIG,    //wykryto zmianę stanu przycisku
+    BTN_PRSS_SIG,    //przycisk został wciśnięty (generowany przy długim wciśnięciu)
     BTN_REL_SIG,    //przycisk został zwolniony
+    BTN_SHORT_SIG,    //krótkie przyciśnięcie (generowane przy zwalnaniu)
+
 
     //ErrEvt
     TX_ERR_SIG,    //błędy raportowane przez nadajnik
@@ -897,14 +1308,20 @@ enum ProjectSignals {
     //ValEvt
     OTEMP_SIG,  /* odczyt temp czujnika zewn.*/
     BATT_SIG,    //odczyt napięcia baterii
+    MIN_TEMP_SIG,    //minimalna temperatura w  zadanym przedziale czasu
+    MAX_TEMP_SIG, //max temp. w zadanym przedziale
+
+    MAX_PUB_SIG,          /* the last published signal */
 
     //MsgEvt
     MSG_SIG,    //treść odebranego komunikatu
 
-    MAX_PUB_SIG,          /* the last published signal */
-
+    UPDATE_MINMAX_SIG,    //zlecenie przeszukania zapisanych danych i publikacji min i max
+    RET_ORTHO_SIG,    //rządanie powrotu z komponentu ortogonalnego
     DISP_BLINK_SIG,    //migotanie wyświetlacza
     ORTHO_BLINK_SIG,  //ticker dla komponentu ortogonalnego wyświetlacza
+    MINMAX_TIMEOUT_SIG,    //sygnał timeoutu dla komponentu orto pt. minimax
+    DELAY_TIMEOUT_SIG,    //AO_Data drop outs detection
     TIMEOUT_SIG,
 
     MAX_SIG                     /* the last signal */
@@ -994,6 +1411,7 @@ $define(AOs::RcvTempDec)</text>
 #include &quot;link-proto.h&quot;
 #include &quot;led7seg.h&quot;
 #include &quot;serdisperr.h&quot;
+#include &quot;serdispminmax.h&quot;
 #include &lt;limits.h&gt;
 
 Q_DEFINE_THIS_FILE
@@ -1179,6 +1597,160 @@ $define(AOs::AO_Control)
 
 $define(AOs::Control_ctor)
 $define(AOs::Control)</text>
+  </file>
+  <file name="data.h" codec="UTF-8">
+   <text>#ifndef data_h
+#define data_h
+
+#include &quot;led7seg.h&quot;
+
+/* symbols definitions */
+
+#define NAN_MINMAX  (ONE_QUESTION)
+
+/* active objects' &quot;constructors&quot; */
+
+$declare(AOs::Data_ctor)
+
+/* instantiation of the orthogonal components */
+
+
+/* opaque pointer to AOs */
+$declare(AOs::AO_Data)
+
+#endif /* data_h */</text>
+  </file>
+  <file name="data.c" codec="UTF-8">
+   <text>#include &quot;qpc.h&quot;
+#include &quot;bsp.h&quot;
+#include &quot;app_conf.h&quot;
+#include &quot;protocol.h&quot;
+#include &quot;project.h&quot;
+#include &quot;datahist.h&quot;
+#include &quot;data.h&quot;
+
+Q_DEFINE_THIS_FILE
+
+#define MESSAGE_PERIOD (BSP_MSG_INTERVAL * BSP_SOFT_TIMER_TICKS_PER_SEC)
+#define MESSAGE_MARGIN (((MSG_REPEAT_NUM-1)+5) * BSP_TICKS_PER_SEC)
+
+
+/* local objects -----------------------------------------------------------*/
+
+$declare(AOs::Data)
+
+static Data l_data; /* the sole instance of this active object */
+
+
+/* Public-scope objects ----------------------------------------------------*/
+
+$define(AOs::AO_Data)
+
+/* Active object definition ================================================*/
+
+$define(AOs::Data_ctor)
+$define(AOs::Data)</text>
+  </file>
+  <file name="button.h" codec="UTF-8">
+   <text>#ifndef button_h
+#define button_h
+
+
+/* symbols definitions */
+
+/* active objects' &quot;constructors&quot; */
+
+$declare(AOs::Button_ctor)
+
+/* instantiation of the orthogonal components */
+
+
+/* opaque pointer to AOs */
+$declare(AOs::AO_Button)
+
+#endif /* button_h */</text>
+  </file>
+  <file name="button.c" codec="UTF-8">
+   <text>#include &quot;qpc.h&quot;
+#include &quot;bsp.h&quot;
+#include &quot;app_conf.h&quot;
+#include &quot;protocol.h&quot;
+#include &quot;project.h&quot;
+#include &quot;button.h&quot;
+
+Q_DEFINE_THIS_FILE
+
+//definicje symboli (poddefinicje są zdefinowane w app_conf.h)
+
+#define LONG_PRESS_TICKS (LONG_PRESS_STRETCH * BSP_TICKS_PER_SEC/1000)
+
+/* local objects -----------------------------------------------------------*/
+
+$declare(AOs::Button)
+
+static Button l_button; /* the sole instance of this active object */
+
+
+/* Public-scope objects ----------------------------------------------------*/
+
+$define(AOs::AO_Button)
+
+/* Active object definition ================================================*/
+
+$define(AOs::Button_ctor)
+$define(AOs::Button)</text>
+  </file>
+  <file name="serdispminmax.h" codec="UTF-8">
+   <text>#ifndef serdispminmax_h
+#define serdispminmax_h
+
+/* symbols definitions */
+
+/* active objects' &quot;constructors&quot; */
+
+$declare(AOs::SerDispMinMax_ctor)
+
+/* instantiation of the orthogonal components */
+
+
+/* opaque pointer to AOs */
+
+
+#endif /* serdispminmax_h */</text>
+  </file>
+  <file name="serdispminmax.c" codec="UTF-8">
+   <text>#include &quot;qpc.h&quot;
+#include &quot;bsp.h&quot;
+#include &quot;project.h&quot;
+#include &quot;serdispminmax.h&quot;
+//#include &quot;link-proto.h&quot;
+#include &quot;led7seg.h&quot;
+#include &quot;err.h&quot;
+#include &quot;rerror.h&quot;
+
+Q_DEFINE_THIS_FILE
+
+#define NAN ONE_QUESTION
+
+#define MIN_DESC_TICKS    (MIN_DESC_MS*BSP_TICKS_PER_SEC/1000)
+#define MIN_TICKS        (MIN_MS*BSP_TICKS_PER_SEC/1000)
+#define MAX_DESC_TICKS    (MAX_DESC_MS*BSP_TICKS_PER_SEC/1000)
+#define MAX_TICKS        (MAX_MS*BSP_TICKS_PER_SEC/1000)
+#define TREND_TICKS    (TREND_MS*BSP_TICKS_PER_SEC/1000)
+
+/* local objects -----------------------------------------------------------*/
+
+$declare(AOs::SerDispMinMax)
+static SerDispMinMax l_serDispMinMax; /* the sole instance of the SerDisp active object */
+
+
+/* Public-scope objects ----------------------------------------------------*/
+
+/* Active object definition ================================================*/
+
+$define(AOs::SerDispMinMax_ctor)
+$define(AOs::SerDispMinMax)
+</text>
   </file>
  </directory>
 </model>
