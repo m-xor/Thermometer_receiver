@@ -46,6 +46,9 @@
 
 Q_DEFINE_THIS_FILE
 
+/* todo: tune the size of queues and pools which are way too large now (see
+ *    QEQueueCtr and QMPoolCtr)
+ */
 enum {
 	dummy_PRIO,	//placeholder
 	//priorytety zadań rosnąco

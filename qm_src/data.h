@@ -23,7 +23,7 @@
 
 /* symbols definitions */
 
-#define NAN_MINMAX  (ALL_MINUS)
+#define NAN_MINMAX  (ONE_QUESTION)
 
 /* active objects' "constructors" */
 

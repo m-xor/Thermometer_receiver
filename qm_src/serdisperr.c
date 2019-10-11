@@ -27,7 +27,7 @@
 
 Q_DEFINE_THIS_FILE
 
-#define NANB ONE_QUESTION
+#define NANB ALL_QUESTION
 
 //definicje symboli (poddefinicje są zdefinowane w bsp.h)
 //Czas włączenia diody w razie wystąpienia błędów. W tikach

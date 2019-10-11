@@ -80,7 +80,7 @@ void SysTick_Handler(void) {   /* system clock tick ISR */
     * adapted from the book "Embedded Systems Dictionary" by Jack Ganssle
     * and Michael Barr, page 71.
     */
-    current = (uint16_t)~GPIO(BUTTON_GPIO)->IDR; /* read Port C with the state of Button B1 */
+    current = (uint16_t)GPIO(BUTTON_GPIO)->IDR; /* read Port C with the state of Button B1 */
     tmp = buttons.depressed; /* save the debounced depressed buttons */
     buttons.depressed |= (buttons.previous & current); /* set depressed */
     buttons.depressed &= (buttons.previous | current); /* clear released */

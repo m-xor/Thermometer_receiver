@@ -41,10 +41,10 @@ enum ProjectSignals {
     MIN_TEMP_SIG,    //minimalna temperatura w  zadanym przedziale czasu
     MAX_TEMP_SIG, //max temp. w zadanym przedziale
 
+    MAX_PUB_SIG,          /* the last published signal */
+
     //MsgEvt
     MSG_SIG,    //treść odebranego komunikatu
-
-    MAX_PUB_SIG,          /* the last published signal */
 
     UPDATE_MINMAX_SIG,    //zlecenie przeszukania zapisanych danych i publikacji min i max
     RET_ORTHO_SIG,    //rządanie powrotu z komponentu ortogonalnego

@@ -11,7 +11,7 @@ Directories of the framework compiler should know about (see Makefile for GCC in
 Includes:
 
 * $(QPC_DIR)/include
-* $(QPC_DIR)/ports/arm-cm/qv/gnu
+* $(QPC_DIR)/ports/arm-cm/qv/gnu (QF_MAX_ACTIVE in qf_port.h set to 9)
 * $(QPC_DIR)/src
 
 Source directories:

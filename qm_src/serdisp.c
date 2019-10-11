@@ -29,7 +29,7 @@
 
 Q_DEFINE_THIS_FILE
 
-#define NAN ONE_MINUS
+#define NAN ALL_MINUS
 
 //definicje symboli (poddefinicje są zdefinowane w bsp.h)
 //do ilu sek. od ostatniego msg dana będzie uznana za aktualną

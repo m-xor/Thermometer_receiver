@@ -1311,10 +1311,10 @@ enum ProjectSignals {
     MIN_TEMP_SIG,    //minimalna temperatura w  zadanym przedziale czasu
     MAX_TEMP_SIG, //max temp. w zadanym przedziale
 
+    MAX_PUB_SIG,          /* the last published signal */
+
     //MsgEvt
     MSG_SIG,    //treść odebranego komunikatu
-
-    MAX_PUB_SIG,          /* the last published signal */
 
     UPDATE_MINMAX_SIG,    //zlecenie przeszukania zapisanych danych i publikacji min i max
     RET_ORTHO_SIG,    //rządanie powrotu z komponentu ortogonalnego
@@ -1416,7 +1416,7 @@ $define(AOs::RcvTempDec)</text>
 
 Q_DEFINE_THIS_FILE
 
-#define NAN ONE_MINUS
+#define NAN ALL_MINUS
 
 //definicje symboli (poddefinicje są zdefinowane w bsp.h)
 //do ilu sek. od ostatniego msg dana będzie uznana za aktualną
@@ -1530,7 +1530,7 @@ $declare(AOs::SerDispErr_ctor)
 
 Q_DEFINE_THIS_FILE
 
-#define NANB ONE_QUESTION
+#define NANB ALL_QUESTION
 
 //definicje symboli (poddefinicje są zdefinowane w bsp.h)
 //Czas włączenia diody w razie wystąpienia błędów. W tikach
@@ -1606,7 +1606,7 @@ $define(AOs::Control)</text>
 
 /* symbols definitions */
 
-#define NAN_MINMAX  (ALL_MINUS)
+#define NAN_MINMAX  (ONE_QUESTION)
 
 /* active objects' &quot;constructors&quot; */
 

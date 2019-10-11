@@ -89,15 +89,15 @@
 /*
  * Time button is to be pressed for "long press" event
  */
-#define LONG_PRESS_STRETCH 700
+#define LONG_PRESS_STRETCH 500
 
 /*
  * Time length of displaying of aggregates in ms
  */
 #define MIN_DESC_MS	500
-#define MIN_MS	1000
+#define MIN_MS	500
 #define MAX_DESC_MS	500
-#define MAX_MS	1000
-#define TREND_MS	1000
+#define MAX_MS	500
+#define TREND_MS	500
 
 #endif /* APP_CONF_H_ */

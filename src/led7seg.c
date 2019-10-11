@@ -120,9 +120,9 @@ void led_display_number(int16_t number, uint8_t base)
 		{
 			buf.array[0] = led_pattern[ QUESTION_SIGN ];
 		}
-		else if(number==ALL_QUESTION)
+		else if(number==ALL_MINUS)
 		{
-			fill_buffer( led_pattern[ QUESTION_SIGN ] );
+			fill_buffer( led_pattern[ MINUS_SIGN ] );
 		}
 		else
 		{
@@ -198,15 +198,17 @@ void led_msg(uint8_t msgno)
 				},
 				{	/* __ */
 					((uint8_t)((PATTERN_MOD(_BV(D_SEG))) & SEG_MASK)),
-					((uint8_t)((PATTERN_MOD(_BV(D_SEG))) & SEG_MASK))
+						((uint8_t)((PATTERN_MOD(0)) & SEG_MASK))
+//					((uint8_t)((PATTERN_MOD(_BV(D_SEG))) & SEG_MASK))
 				},
 				{	/* ^^ */
 					((uint8_t)((PATTERN_MOD(_BV(A_SEG))) & SEG_MASK)),
-					((uint8_t)((PATTERN_MOD(_BV(A_SEG))) & SEG_MASK))
+					((uint8_t)((PATTERN_MOD(0)) & SEG_MASK))
+//					((uint8_t)((PATTERN_MOD(_BV(A_SEG))) & SEG_MASK))
 				},
 				{	/* -- */
-					((uint8_t)((PATTERN_MOD(_BV(G_SEG))) & SEG_MASK)),
-					((uint8_t)((PATTERN_MOD(_BV(G_SEG))) & SEG_MASK))
+					((uint8_t)((PATTERN_MOD(0)) & SEG_MASK)),
+					((uint8_t)((PATTERN_MOD(0)) & SEG_MASK))
 				}
 
 
