@@ -21,3 +21,7 @@ Source directories:
 * $(QPC_DIR)/src/qv
 * $(QPC_DIR)/ports/arm-cm/qv/gnu
 
+
+Third party code
+* VirtualWire implemented by Mike McCauley (mikem@airspayce.com) https://www.airspayce.com/mikem/arduino/VirtualWire/ (see also https://wireless.murata.com/media/products/apnotes/tr_swg05.pdf?ref=rfm.com)
+* Decoder of DS18B20 readouts by Martin Thomas 
