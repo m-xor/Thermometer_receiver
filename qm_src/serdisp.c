@@ -529,6 +529,13 @@ static QState SerDisp_minimax(SerDisp * const me, QEvt const * const e) {
             status_ = Q_TRAN(&SerDisp_minimax_blink);
             break;
         }
+        /*${AOs::SerDisp::SM::display::minimax::BTN_PRSS} */
+        case BTN_PRSS_SIG: {
+            QHSM_DISPATCH(me->minmaxOrthoPtr, (QEvt *)e); /* direct dispatch */
+            QHSM_DISPATCH(me->orthoCompPtr, (QEvt *)e); /* direct dispatch */
+            status_ = Q_TRAN(&SerDisp_handover);
+            break;
+        }
         default: {
             status_ = Q_SUPER(&SerDisp_display);
             break;
@@ -562,6 +569,13 @@ static QState SerDisp_minimax_blink(SerDisp * const me, QEvt const * const e) {
         case TIMEOUT_SIG: {
             me->lastRoundTemp = NAN;
             status_ = Q_TRAN(&SerDisp_minimax);
+            break;
+        }
+        /*${AOs::SerDisp::SM::display::minimax::minimax_blink::BTN_PRSS} */
+        case BTN_PRSS_SIG: {
+            QHSM_DISPATCH(me->minmaxOrthoPtr, (QEvt *)e); /* direct dispatch */
+            QHSM_DISPATCH(me->orthoCompPtr, (QEvt *)e); /* direct dispatch */
+            status_ = Q_TRAN(&SerDisp_handover_blink);
             break;
         }
         default: {

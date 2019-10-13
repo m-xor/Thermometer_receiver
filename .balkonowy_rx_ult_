@@ -8,12 +8,7 @@
   <item name="grid">3</item>
   <item name="backups">0</item>
  </group>
- <group name="windows">
-  <item id="AOs::Rcv::SM">-151,0,640,480</item>
-  <item id="AOs::Button::SM">0,54,640,480</item>
-  <item id="AOs::Control::SM">-244,54,640,480</item>
-  <item id="qm_src::project.h">0,0,396,534,*</item>
- </group>
+ <group name="windows"/>
  <group name="search">
   <item name="options">2032128</item>
   <item name="replace">0</item>

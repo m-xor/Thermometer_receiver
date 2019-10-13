@@ -124,6 +124,11 @@ static QState SerDispMinMax_container(SerDispMinMax * const me, QEvt const * con
             status_ = Q_HANDLED();
             break;
         }
+        /*${AOs::SerDispMinMax::SM::container::BTN_PRSS} */
+        case BTN_PRSS_SIG: {
+            status_ = Q_TRAN(&SerDispMinMax_idle);
+            break;
+        }
         default: {
             status_ = Q_SUPER(&QHsm_top);
             break;
