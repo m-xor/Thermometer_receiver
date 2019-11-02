@@ -83,8 +83,8 @@
  * Range of time since when data is saved.
  * in hours
  */
-#define SAVED_DATA_SCOPE 24
-//#define SAVED_DATA_SCOPE 12
+//#define SAVED_DATA_SCOPE 24
+#define SAVED_DATA_SCOPE 12
 
 /*
  * Time button is to be pressed for "long press" event
