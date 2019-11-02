@@ -42,11 +42,19 @@
 #define ERROR_SEG 1
 
 //wartości specjalne funkcji led_display_number
-#define ALL_MINUS INT16_MAX
-#define ALL_QUESTION (INT16_MAX-1)
-#define ONE_MINUS (INT16_MAX-2)
-#define ONE_QUESTION (INT16_MAX-3)
-#define SPEC_SIGNS_GUARD (INT16_MAX-4)	//zawsze na końcu
+//#define ALL_MINUS INT16_MAX
+//#define ALL_QUESTION (INT16_MAX-1)
+//#define ONE_MINUS (INT16_MAX-2)
+//#define ONE_QUESTION (INT16_MAX-3)
+//#define SPEC_SIGNS_GUARD (INT16_MAX-4)	//zawsze na końcu
+enum {
+	SPEC_SIGNS_GUARD = INT16_MAX - 5,	/* look out for subtrahend! */
+	ZERO_MINUS,
+	ONE_QUESTION,
+	ONE_MINUS,
+	ALL_QUESTION,
+	ALL_MINUS
+};
 
 //0 - stani niski włącza segment, 1 - stan wysoki włącza segment (sct2024 włącza wysokim)
 #define LED_ACTIVE 1

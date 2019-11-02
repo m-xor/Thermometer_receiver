@@ -7,7 +7,9 @@
 
 #include "led7seg.h"
 #include "spi.h"
+#include "qassert.h"
 
+Q_DEFINE_THIS_FILE
 
 //****************** definicje **********************
 
@@ -124,9 +126,18 @@ void led_display_number(int16_t number, uint8_t base)
 		{
 			fill_buffer( led_pattern[ MINUS_SIGN ] );
 		}
-		else
+		else if(number==ALL_QUESTION)
 		{
 			fill_buffer( led_pattern[ QUESTION_SIGN ] );
+		}
+		else  if(number==ZERO_MINUS)
+		{
+			buf.array[0] = led_pattern[ 0 ];
+			buf.array[MINUS_SEG] |= _BV(SPEC_SEG);
+		}
+		else
+		{
+			Q_ERROR();
 		}
 	}
 	else

@@ -297,6 +297,7 @@ QF_PUBLISH((QEvt*)pe, me);</action>
     <parameter name="den" type="uint8_t"/>
     <code>(void)me;
 uint16_t value, rest=0;
+bool subzero = false;
 
 /* to not to lose special symbols coded out of range of variable*/
 if(val&gt;SPEC_SIGNS_GUARD)
@@ -309,6 +310,7 @@ if(val == INT16_MIN)
 else if( val&lt;0 )
 {
     value = - val;
+    subzero = true;
 }
 else
     value = val;
@@ -320,31 +322,10 @@ while(den--)
 }
 
 value += (rest&gt;=5);
-return ((val&lt;0)?-value:value);
-
-
-//int16_t minus = 1;
-//int16_t value = val;
-//int16_t tmp_val;
-//int16_t tmp_rest;
-
-//if(value&lt;0)
-//{
-//    minus = -1;
-//    value *= -1;
-//}
-
-//while(den)
-//{
-//    tmp_val = value / 10;
-//    tmp_rest = value % 10;
-//    value = tmp_val;
-//    den--;
-//}
-
-//tmp_val += (tmp_rest&gt;=5) ?  1 : 0;
-//tmp_val *= minus;
-//return ( tmp_val );</code>
+if( !value &amp;&amp; subzero ) return ZERO_MINUS; /* that's right! */
+//return ((val&lt;0)?-value:value);
+return (subzero?-value:value);
+</code>
    </operation>
    <statechart properties="QS_FUN_DICT">
     <initial target="../1">

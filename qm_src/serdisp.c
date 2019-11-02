@@ -114,6 +114,7 @@ void SerDisp_ctor(void) {
 static int16_t SerDisp_roundValue(SerDisp * const me, int16_t val, uint8_t den) {
     (void)me;
     uint16_t value, rest=0;
+    bool subzero = false;
 
     /* to not to lose special symbols coded out of range of variable*/
     if(val>SPEC_SIGNS_GUARD)
@@ -126,6 +127,7 @@ static int16_t SerDisp_roundValue(SerDisp * const me, int16_t val, uint8_t den) 
     else if( val<0 )
     {
         value = - val;
+        subzero = true;
     }
     else
         value = val;
@@ -137,31 +139,10 @@ static int16_t SerDisp_roundValue(SerDisp * const me, int16_t val, uint8_t den) 
     }
 
     value += (rest>=5);
-    return ((val<0)?-value:value);
+    if( !value && subzero ) return ZERO_MINUS; /* that's right! */
+    //return ((val<0)?-value:value);
+    return (subzero?-value:value);
 
-
-    //int16_t minus = 1;
-    //int16_t value = val;
-    //int16_t tmp_val;
-    //int16_t tmp_rest;
-
-    //if(value<0)
-    //{
-    //    minus = -1;
-    //    value *= -1;
-    //}
-
-    //while(den)
-    //{
-    //    tmp_val = value / 10;
-    //    tmp_rest = value % 10;
-    //    value = tmp_val;
-    //    den--;
-    //}
-
-    //tmp_val += (tmp_rest>=5) ?  1 : 0;
-    //tmp_val *= minus;
-    //return ( tmp_val );
 }
 
 /*${AOs::SerDisp::SM} ......................................................*/
