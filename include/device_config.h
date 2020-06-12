@@ -14,8 +14,8 @@
 
 //wejście ADC
 #define LDR_GPIO			A
-//#define LDR_PIN				0	//ADC0
-#define LDR_PIN				1	//faza testow
+//#define LDR_PIN				0	//ADC0 ----- UWAGA ------
+#define LDR_PIN				1	//obwód testowy
 //dla pinów A0-A7 nr kanału równy nr pinu, na PB1 kanał ADC 9
 #define ADC_CHANNEL	LDR_PIN
 //długość średniej kroczącej odczutu LDR
@@ -46,18 +46,18 @@
 #define VW_SPEED	2000
 
 #define BUTTON_GPIO			A
-//#define BUTTON_PIN			1
-#define BUTTON_PIN			0	//faza testów
+//#define BUTTON_PIN			10 // ------ UWAGA -----
+#define BUTTON_PIN			0	//obwód testowy
 
 //opcjonalnie, config lub wyjście QSPY
 #define UART_GPIO			A
 #define UART_RX_PIN		3
 #define UART_TX_PIN		2
 
-//opcjonalnie, wyjście QSPY
-#define I2C_GPIO			A
-#define I2C_SCL				9
-#define I2C_SDA				10
+////opcjonalnie, wyjście QSPY
+//#define I2C_GPIO			A
+//#define I2C_SCL				9
+//#define I2C_SDA				10 //zajęte przez button
 
 //Zostawić w stanie domyślnym
 #define SW_GPIO			A

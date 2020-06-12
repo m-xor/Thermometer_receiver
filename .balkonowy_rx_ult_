@@ -10,7 +10,12 @@
  </group>
  <group name="windows">
   <item id="AOs::SerDisp::SM">0,0,361,515</item>
-  <item id="qm_src::serdisp.c">0,0,299,515,*</item>
+  <item id="qm_src::serdisp.c">0,0,369,476</item>
+  <item id="qm_src::serdisperr.h">85,0,284,300</item>
+  <item id="qm_src::serdisp.h">0,0,369,476</item>
+  <item id="qm_src::project.h">0,0,369,476,*</item>
+  <item id="qm_src::receiver.h">0,176,284,300</item>
+  <item id="qm_src::receiver.c">-76,0,445,476</item>
  </group>
  <group name="search">
   <item name="options">2032128</item>
